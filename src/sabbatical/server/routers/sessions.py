@@ -141,6 +141,12 @@ async def send_message(
         )
 
     runner = create_assistant_agent(config, db, session["organization_scope"])
+
+    # Initialize the ADK session first
+    await runner.session_service.create_session(
+        app_name="sabbatical_assistant", user_id="sabbatical", session_id=session_id
+    )
+
     prior_messages = await db.fetch_all(
         "SELECT * FROM session_messages WHERE session_id = :id ORDER BY created_at ASC",
         {"id": session_id},
@@ -150,7 +156,7 @@ async def send_message(
         await runner.session_service.append_event(
             session_id=session_id,
             event=types.Content(
-                role=msg["role"], parts=[types.Part.from_text(msg["content"])]
+                role=msg["role"], parts=[types.Part.from_text(text=msg["content"])]
             ),
         )
 
@@ -163,7 +169,7 @@ async def send_message(
             user_id="sabbatical",
             session_id=session_id,
             new_message=types.Content(
-                role="user", parts=[types.Part.from_text(body.content)]
+                role="user", parts=[types.Part.from_text(text=body.content)]
             ),
             run_config=RunConfig(streaming_mode=StreamingMode.SSE),
         ):

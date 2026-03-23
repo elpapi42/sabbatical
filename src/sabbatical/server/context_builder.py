@@ -149,7 +149,7 @@ You are now executing this task. Do your work using the available tools, then wr
 
     user_message = types.Content(
         role="user",
-        parts=[types.Part.from_text(block_d)],
+        parts=[types.Part.from_text(text=block_d)],
     )
 
     return system_prompt, user_message
