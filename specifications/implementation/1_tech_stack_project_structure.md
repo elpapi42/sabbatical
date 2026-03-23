@@ -39,21 +39,22 @@ prompt-toolkit           # Chat TUI input handling and terminal rendering
 
 ```
 sabbatical/
-├── pyproject.toml                   # Poetry project config
+├── pyproject.toml                   # Poetry project config + PyPI metadata
 ├── poetry.lock                      # Locked dependencies
 ├── README.md
-├── alembic.ini                      # Alembic configuration
-│
-├── migrations/
-│   ├── env.py                       # Alembic environment (uses SQLAlchemy metadata)
-│   ├── script.py.mako               # Migration template
-│   └── versions/                    # Auto-generated migration files
-│       └── 001_initial_schema.py
+├── LICENSE                          # MIT License
+├── alembic.ini                      # Alembic configuration (dev-only: alembic revision)
 │
 ├── src/
 │   └── sabbatical/
 │       ├── __init__.py
 │       ├── __main__.py              # Entry point: python -m sabbatical
+│       │
+│       ├── migrations/              # Bundled inside the package for pipx/wheel distribution
+│       │   ├── env.py               # Alembic environment (uses SQLAlchemy metadata)
+│       │   ├── script.py.mako       # Migration template
+│       │   └── versions/            # Auto-generated migration files
+│       │       └── 001_initial_schema.py
 │       │
 │       ├── config.py                # Global config loading from ~/.sabbatical/
 │       ├── db.py                    # Database connection via `databases`, SQLAlchemy table defs

@@ -73,7 +73,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
 
         step_count = 0
         iteration_count = 0
-        final_text = None
+        final_text_parts = []
 
         async for event in runner.run_async(
             user_id="sabbatical",
@@ -83,7 +83,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             if event.content and event.content.parts:
                 text = "".join(p.text for p in event.content.parts if p.text)
                 if text:
-                    final_text = text
+                    final_text_parts.append(text)
 
             if event.get_function_calls():
                 for fc in event.get_function_calls():
@@ -104,7 +104,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                     {
                         "step": step_count,
                         "type": "llm_reasoning",
-                        "content": final_text,
+                        "content": text,
                     }
                 )
 
@@ -119,6 +119,8 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                     run_id, task_id, agent_row["max_iterations"]
                 )
                 raise MaxIterationsExceeded(iteration_count)
+
+        final_text = "".join(final_text_parts) if final_text_parts else None
 
         if final_text:
             steps.append(

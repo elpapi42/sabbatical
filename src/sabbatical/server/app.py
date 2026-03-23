@@ -1,7 +1,12 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Configure strands-agents-tools for headless agent execution
+os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
+os.environ.setdefault("STRANDS_TOOL_CONSOLE_MODE", "disabled")
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
@@ -20,13 +25,13 @@ from sabbatical.server.routers import (
     tasks,
 )
 
-# Resolve alembic.ini path relative to the project root (two levels up from this file)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_ALEMBIC_INI = _PROJECT_ROOT / "alembic.ini"
+# Migrations directory is bundled inside the package at sabbatical/migrations/
+_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 
 def run_migrations(db_path: str):
-    alembic_cfg = AlembicConfig(str(_ALEMBIC_INI))
+    alembic_cfg = AlembicConfig()
+    alembic_cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
     alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     alembic_command.upgrade(alembic_cfg, "head")
 

@@ -1,9 +1,25 @@
 [project]
 name = "sabbatical"
 version = "0.1.0"
-description = "Sabbatical - AI Agent Orchestration CLI"
+description = "Local AI agent orchestration CLI — async task collaboration for developers"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12,<4.0"
+authors = [
+    { name = "elpapi42" }
+]
+keywords = ["ai", "agents", "cli", "orchestration", "llm", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+]
 dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
@@ -15,8 +31,14 @@ dependencies = [
     "httpx>=0.27.0",
     "sse-starlette>=2.1.0",
     "prompt-toolkit>=3.0.0",
-    "google-adk[extensions]>=0.1.0"
+    "google-adk[extensions]>=0.1.0",
+    "strands-agents-tools (>=0.2.23,<0.3.0)"
 ]
+
+[project.urls]
+Homepage = "https://github.com/elpapi42/sabbatical"
+Repository = "https://github.com/elpapi42/sabbatical"
+Issues = "https://github.com/elpapi42/sabbatical/issues"
 
 [project.scripts]
 sabbatical = "sabbatical.cli.main:app"

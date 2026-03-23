@@ -141,9 +141,9 @@ async def get_database(db_path: str) -> databases.Database:
 
 Alembic manages all schema changes. The initial migration is generated from the SQLAlchemy `metadata` object.
 
-**`alembic.ini`** — Points to the `migrations/` directory. The `sqlalchemy.url` is overridden at runtime from `config.toml` via `migrations/env.py`.
+**`alembic.ini`** — Dev-only config file at the project root. Used exclusively for running `alembic revision` from the CLI during development. Points `script_location` to `src/sabbatical/migrations`. Not used at runtime — the server builds its config programmatically.
 
-**`migrations/env.py`** — Imports `metadata` from `sabbatical.db` and configures the migration context:
+**`src/sabbatical/migrations/env.py`** — Imports `metadata` from `sabbatical.db` and configures the migration context:
 
 ```python
 from sabbatical.db import metadata
@@ -158,23 +158,30 @@ with connectable.connect() as connection:
         context.run_migrations()
 ```
 
-**On first `up`:** The server startup (`lifespan`) runs `alembic upgrade head` programmatically before starting the Dispatcher:
+**On first `up`:** The server startup (`lifespan`) runs `alembic upgrade head` programmatically before starting the Dispatcher. The migrations directory is resolved relative to `app.py` so it works correctly both in development and when installed via pipx:
 
 ```python
+from pathlib import Path
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
+# Resolves to src/sabbatical/migrations/ in dev, site-packages/sabbatical/migrations/ when installed
+_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+
 def run_migrations(db_path: str):
     """Run pending Alembic migrations."""
-    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_cfg = AlembicConfig()
+    alembic_cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
     alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     alembic_command.upgrade(alembic_cfg, "head")
 ```
 
-**Generating new migrations:**
+**Generating new migrations (dev workflow):**
 ```bash
 alembic revision --autogenerate -m "description of change"
 ```
+
+New migration files are written to `src/sabbatical/migrations/versions/` and are automatically bundled into the wheel at build time.
 
 ### Key Design Notes
 

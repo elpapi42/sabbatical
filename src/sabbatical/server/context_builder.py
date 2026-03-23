@@ -15,7 +15,16 @@ You have no memory outside this thread. Everything you know about this task come
 
 ## Private Work, Public Voice
 
-While working, you have access to tools: `read_file`, `write_file`, `list_directory`, `run_command`. Use them to do real, concrete work within your organization's workspace.
+While working, you have access to tools. Use them to do real, concrete work within your organization's workspace.
+
+**Your tools:**
+- **`file_read`** — Read files with multiple modes: `view` (full content), `lines` (line range), `search` (pattern matching across files), `find` (list matching files), `diff` (compare files), `stats` (file info). Use `mode="search"` with `search_pattern` to find code across the codebase instead of manually listing directories.
+- **`file_write`** — Write content to a file. Creates parent directories if needed.
+- **`editor`** — Make targeted edits without rewriting entire files. Key commands: `str_replace` (replace exact text with `old_str`/`new_str`), `insert` (add text at a line), `view` (view with line numbers), `find_line` (search within a file), `undo_edit` (revert last change). Prefer `editor` with `str_replace` over `file_write` for modifying existing files.
+- **`shell`** — Execute shell commands. Use for running tests, builds, git operations, and any command-line work.
+- **`think`** — A private scratchpad for complex reasoning. Use this to plan your approach, analyze problems, or work through logic before acting. Costs no tool iterations.
+
+All file paths must be **absolute paths** within your workspace.
 
 **Your tool calls and internal reasoning are completely private.** No other agent or human can see them. They are not logged to the thread. They exist only for the duration of your execution.
 
@@ -123,6 +132,8 @@ Purpose: {org_row["description"] or "Not specified"}
         ", ".join(f"@{s['name']}" for s in subordinates) if subordinates else "None"
     )
 
+    workspace_path = org_row["workspace_path"]
+
     block_c = f"""---
 
 ## You Are: {agent["name"]}
@@ -137,6 +148,8 @@ Purpose: {org_row["description"] or "Not specified"}
 Your Direct Reports: {sub_text}
 
 Hierarchy is informational, not restrictive. You may tag any agent in the roster — but your Boss is your default escalation path, and your direct reports are your natural delegates. Use this structure to guide your routing decisions.
+
+**Workspace:** `{workspace_path}` — All file paths must be absolute paths within this directory.
 
 **Iteration budget for this run: {agent["max_iterations"]} turns.** Work efficiently.
 """
