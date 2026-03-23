@@ -52,6 +52,11 @@ def print_task_tray(timeline: list[dict]):
                 if item.get("duration_seconds") is not None
                 else "-"
             )
-            typer.echo(
-                f"\n[RUN: {item['run_id']} | Agent: {item['agent']} | Status: {item['status']} | Duration: {dur} | Cost: ${item['cost']:.3f}]"
-            )
+            if item["status"] == "running":
+                typer.echo(
+                    f"\n>>> [RUNNING: {item['run_id']} | Agent: {item['agent']} | Elapsed: {dur}] <<<"
+                )
+            else:
+                typer.echo(
+                    f"\n[RUN: {item['run_id']} | Agent: {item['agent']} | Status: {item['status']} | Duration: {dur} | Cost: ${item['cost']:.3f}]"
+                )

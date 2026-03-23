@@ -155,7 +155,7 @@ async def get_task(id: str, db=Depends(get_db)):
         "SELECT * FROM comments WHERE task_id = :id ORDER BY created_at ASC", {"id": id}
     )
     runs = await db.fetch_all(
-        "SELECT * FROM runs WHERE task_id = :id AND status != 'running' ORDER BY ended_at ASC",
+        "SELECT * FROM runs WHERE task_id = :id ORDER BY started_at ASC",
         {"id": id},
     )
 
@@ -170,11 +170,14 @@ async def get_task(id: str, db=Depends(get_db)):
             }
         )
     for r in runs:
-        dur = None
+        st = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
         if r["ended_at"]:
-            st = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
             en = datetime.fromisoformat(r["ended_at"].replace("Z", "+00:00"))
             dur = (en - st).total_seconds()
+        elif r["status"] == "running":
+            dur = (datetime.now(timezone.utc) - st).total_seconds()
+        else:
+            dur = None
 
         timeline.append(
             {
@@ -185,7 +188,7 @@ async def get_task(id: str, db=Depends(get_db)):
                 "duration_seconds": dur,
                 "cost": r["total_cost"],
                 "started_at": r["started_at"],
-                "ended_at": r["ended_at"] or r["started_at"],  # fallback
+                "ended_at": r["ended_at"],
                 "created_at": r["ended_at"] or r["started_at"],  # for sorting
             }
         )
