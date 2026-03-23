@@ -1,16 +1,18 @@
 import json
 from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+
 from sabbatical.models import (
-    OrganizationCreate,
-    OrganizationUpdate,
-    OrganizationSummary,
-    OrganizationDetail,
     AgentNode,
+    OrganizationCreate,
+    OrganizationDetail,
+    OrganizationSummary,
+    OrganizationUpdate,
 )
-from sabbatical.server.dependencies import get_db
 from sabbatical.server.cost import organization_total_cost
-import json
-from pathlib import Path
+from sabbatical.server.dependencies import get_db
 
 router = APIRouter(tags=["Organizations"])
 
@@ -171,14 +173,6 @@ async def delete_organization(name: str, db=Depends(get_db)):
                     "message": "Cannot delete organization with in_progress tasks."
                 },
             )
-    async with db.transaction():
-        org = await db.fetch_one("SELECT name FROM organizations WHERE name = :name", {"name": name})
-        if not org:
-            return JSONResponse(status_code=404, content={"message": f"Organization '{name}' not found."})
-
-        in_progress = await db.fetch_one("SELECT id FROM tasks WHERE organization_name = :org AND status = 'in_progress'", {"org": name})
-        if in_progress:
-            return JSONResponse(status_code=409, content={"message": "Cannot delete organization with in_progress tasks."})
 
         # Due to ON DELETE CASCADE, this deletes agents, tasks, comments, runs, sessions, session_messages
         await db.execute("DELETE FROM organizations WHERE name = :name", {"name": name})
