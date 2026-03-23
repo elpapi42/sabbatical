@@ -11,8 +11,9 @@ async def build_context_payload(db, config, agent, task, comments, org_name):
     """Returns (system_prompt: str, user_message: types.Content)."""
 
     # ── Block A: System Rules & Protocol ──
-    block_a = SYSTEM_RULES_TEMPLATE  # Constant string: handoff protocol, execution
-                                      # constraints, formatting rules
+    block_a = SYSTEM_RULES_TEMPLATE  # Constant string: how Sabbatical works, private
+                                      # work / public voice, handoff protocol,
+                                      # iteration budget, error handling
 
     # ── Block B: Organization Topology ──
     org_row = await fetch_organization(db, org_name)
@@ -25,39 +26,54 @@ Purpose: {org_row['description'] or 'Not specified'}
 {tree_text}
 """
 
-    # ── Block C: Agent Profile ──
+    # ── Block C: Agent Identity & Place in Organization ──
     instructions = Path(agent["instructions_path"]).read_text()
     boss_text = f"Your Boss: @{agent['boss']}" if agent["boss"] else "You are a root agent (no Boss)."
     subordinates = await fetch_subordinates(db, org_name, agent["name"])
     sub_text = ", ".join(f"@{s['name']}" for s in subordinates) if subordinates else "None"
-    block_c = f"""## Your Identity: {agent['name']}
-{boss_text}
-Your Subordinates: {sub_text}
-Max Iterations: {agent['max_iterations']}
+    block_c = f"""---
+
+## You Are: {agent['name']}
 
 {instructions}
+
+---
+
+## Your Place in the Organization
+
+{boss_text}
+Your Direct Reports: {sub_text}
+
+Hierarchy is informational, not restrictive. You may tag any agent in the roster — but your Boss is your default escalation path, and your direct reports are your natural delegates. Use this structure to guide your routing decisions.
+
+**Iteration budget for this run: {agent['max_iterations']} turns.** Work efficiently.
 """
 
     system_prompt = f"{block_a}\n\n{block_b}\n\n{block_c}"
 
-    # ── Block D: Task State & Comments (Dynamic Suffix) ──
+    # ── Block D: Task Briefing (Dynamic Suffix) ──
     comment_thread = "\n\n".join(
         f"**{c['author']}** ({c['created_at']}):\n{c['body']}"
         for c in comments
     )
-    block_d = f"""## Current Task
-ID: {task['id']}
-Organization: {org_name}
-Title: {task['title']}
+    block_d = f"""---
 
-### Description
+## Task Briefing
+
+**{task['id']} — {task['title']}**
+Organization: {org_name}
+
+### What Needs to Be Done
+
 {task['description']}
 
-### Comment Thread
-{comment_thread if comment_thread else '(No comments yet)'}
+### Thread — Team History on This Task
+
+{comment_thread if comment_thread else '(This task has just been opened. You are the first to work on it.)'}
 
 ---
-You are now executing this task. Do your work using the available tools, then write your final output.
+
+This thread is now yours to advance. Do your work, then write your message to the team. Your message becomes the next comment in this thread — address it clearly, summarize what you accomplished, and include an @tag to route the task to whoever should go next.
 """
 
     user_message = types.Content(
