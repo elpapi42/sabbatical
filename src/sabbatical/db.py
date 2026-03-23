@@ -191,11 +191,27 @@ session_messages = Table(
 )
 
 
+class _PragmaPool:
+    """Wraps SQLitePool to execute PRAGMAs on every new connection."""
+
+    def __init__(self, original_pool):
+        self._pool = original_pool
+
+    async def acquire(self):
+        conn = await self._pool.acquire()
+        await conn.execute("PRAGMA foreign_keys=ON")
+        await conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    async def release(self, connection):
+        await self._pool.release(connection)
+
+
 async def get_database(db_path: str) -> databases.Database:
     """Create and connect a databases.Database instance."""
     database = databases.Database(f"sqlite+aiosqlite:///{db_path}")
     await database.connect()
-    # Enable WAL mode and foreign keys
-    await database.execute(query="PRAGMA journal_mode=WAL")
-    await database.execute(query="PRAGMA foreign_keys=ON")
+    # Wrap the pool to set pragmas on every connection
+    backend = database._backend
+    backend._pool = _PragmaPool(backend._pool)
     return database

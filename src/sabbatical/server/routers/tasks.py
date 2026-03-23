@@ -14,7 +14,7 @@ from sabbatical.models import (
 )
 from sabbatical.server.cost import sum_run_costs
 from sabbatical.server.dependencies import get_db, get_dispatcher
-from sabbatical.server.tag_parser import parse_first_tag
+from sabbatical.server.tag_parser import resolve_first_valid_tag
 
 router = APIRouter(tags=["Tasks"])
 
@@ -232,31 +232,32 @@ async def comment_task(id: str, comment: CommentCreate, db=Depends(get_db)):
                 },
             )
 
-        tag = parse_first_tag(comment.body)
+        # Build valid routing targets for this organization
+        roster = await db.fetch_all(
+            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            {"org": task["organization_name"]},
+        )
+        valid_names = {r["name"] for r in roster} | {"user"}
+
+        tag, all_tags = resolve_first_valid_tag(comment.body, valid_names)
+
+        # Tags present but none resolved to a valid target
+        if not tag and all_tags:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "message": f"No valid agent found for tag(s): {', '.join('@' + t for t in all_tags)}"
+                },
+            )
+
         new_assignee = task["assignee"]
         new_status = task["status"]
         queued_at = task["queued_at"]
 
         if tag:
-            if tag == "user":
-                new_assignee = "user"
-                new_status = "open"
-                queued_at = now
-            else:
-                agent = await db.fetch_one(
-                    "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
-                    {"name": tag, "org": task["organization_name"]},
-                )
-                if not agent:
-                    return JSONResponse(
-                        status_code=404,
-                        content={
-                            "message": f"Agent '{tag}' not found in organization."
-                        },
-                    )
-                new_assignee = tag
-                new_status = "open"
-                queued_at = now
+            new_assignee = tag if tag != "user" else "user"
+            new_status = "open"
+            queued_at = now
 
         await db.execute(
             "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'user', :body, :now)",

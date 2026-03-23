@@ -1,12 +1,13 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 
-from sabbatical.config import load_config
+from sabbatical.config import CONFIG_PATH, load_config
 from sabbatical.db import get_database
 from sabbatical.logging_setup import setup_logging
 from sabbatical.server.dispatcher import Dispatcher
@@ -19,9 +20,13 @@ from sabbatical.server.routers import (
     tasks,
 )
 
+# Resolve alembic.ini path relative to the project root (two levels up from this file)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_ALEMBIC_INI = _PROJECT_ROOT / "alembic.ini"
+
 
 def run_migrations(db_path: str):
-    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_cfg = AlembicConfig(str(_ALEMBIC_INI))
     alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     alembic_command.upgrade(alembic_cfg, "head")
 
@@ -34,6 +39,10 @@ async def lifespan(app: FastAPI):
     setup_logging(config.logging.level, config.logging.file)
     logger = logging.getLogger(__name__)
 
+    if not config.llm.openrouter_api_key:
+        logger.error("OPENROUTER_API_KEY is not configured in %s", str(CONFIG_PATH))
+        raise SystemExit("Missing openrouter_api_key in config. Set it in ~/.sabbatical/config.toml")
+
     logger.info(
         "server starting host=%s port=%d db=%s model=%s",
         config.server.host,
@@ -42,7 +51,8 @@ async def lifespan(app: FastAPI):
         config.llm.default_model,
     )
 
-    # run_migrations(config.server.db_path)
+    # Run migrations in a thread to avoid blocking the async event loop
+    await asyncio.to_thread(run_migrations, config.server.db_path)
 
     db = await get_database(config.server.db_path)
 

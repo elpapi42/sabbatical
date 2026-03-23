@@ -35,6 +35,7 @@ Autonomous workers defined by an instructions file. Agents are stateless profile
 * `boss` — Optional. Reference to another agent in the same organization. If null, the agent is a hierarchy root.
 * `instructions_path` — Path to a `.md` file containing the agent's core system prompt (identity, persona, domain expertise).
 * `max_iterations` — The maximum number of LLM iterations (turns) the agent can perform per Run before the Dispatcher triggers a circuit breaker. Defaults to a system-wide value defined in configuration.
+* `model` — Optional. The LLM model identifier to use for this agent's Runs (e.g., `minimax/minimax-m2.7`). If null, the system-wide default model from configuration is used.
 * `is_removed` — Boolean flag indicating whether the agent has been soft-deleted. Defaults to `false`.
 
 ### Soft-Delete Semantics
@@ -104,7 +105,7 @@ A first-class entity representing a single, contiguous block of agent execution 
 * `organization_name` — The organization this run occurred within.
 * `status` — The outcome of the run: `success`, `failed`, or `preempted`.
 * `started_at` / `ended_at` — Timestamps for calculating duration.
-* `duration` — Total execution time (computed at query time from `started_at` and `ended_at`, not stored).
+* `duration_seconds` — *(Computed, not stored.)* Total execution time in seconds, calculated at query time from `started_at` and `ended_at`.
 * `execution_steps` — A structured array (e.g., JSON) logging every granular step. Each step records the LLM reasoning, the specific tool invoked from the shared static tool set, the arguments passed, and the exact terminal or file system output.
 
 ### Cost Fields (Stored on Run)
@@ -116,7 +117,7 @@ A first-class entity representing a single, contiguous block of agent execution 
 These are the only persisted cost fields in the system. All higher-level aggregates (agent, task, organization) are derived from Runs at query time.
 
 ### Run Status Semantics
-* **`running`** — A transient internal state representing an active worker thread. This is never exposed in API responses.
+* **`running`** — An active worker thread is currently executing this Run. Visible in API responses to indicate real-time execution status.
 * **`success`** — The agent produced a final output (with or without a valid `@` tag). The Run completed normally.
 * **`failed`** — The circuit breaker was tripped: unhandled exception, LLM API error, context window exceeded, or `max_steps` limit reached. The error is captured in the final execution step.
 * **`preempted`** — The Run was interrupted externally: user preemption (`task preempt`), user cancellation (`task cancel`), or server shutdown (`server down`). The reason is captured in the final execution step.

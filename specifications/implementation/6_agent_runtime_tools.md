@@ -43,6 +43,7 @@ def create_agent_runner(
         app_name="sabbatical",
         agent=agent,
         session_service=session_service,
+        auto_create_session=True,
     )
 
     session_id = f"run-{uuid.uuid4().hex[:8]}"
@@ -80,45 +81,69 @@ def create_workspace_tools(workspace_path: str) -> list:
 
     def read_file(path: str) -> str:
         """Read the contents of a file at the given path relative to the workspace."""
-        target = _enforce_path(path)
-        return target.read_text()
+        try:
+            target = _enforce_path(path)
+            return target.read_text()
+        except FileNotFoundError:
+            return f"[ERROR] File not found: '{path}'. Use list_directory to see available files."
+        except IsADirectoryError:
+            return f"[ERROR] '{path}' is a directory, not a file. Use list_directory to see its contents."
+        except ValueError as e:
+            return f"[ERROR] {e}"
 
     def write_file(path: str, content: str) -> str:
         """Write content to a file at the given path relative to the workspace.
         Creates parent directories if needed."""
-        target = _enforce_path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content)
-        return f"Written {len(content)} bytes to {path}"
+        try:
+            target = _enforce_path(path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+            return f"Written {len(content)} bytes to {path}"
+        except ValueError as e:
+            return f"[ERROR] {e}"
+        except OSError as e:
+            return f"[ERROR] Failed to write '{path}': {e}"
 
     def list_directory(path: str = ".") -> str:
         """List files and directories at the given path relative to the workspace."""
-        target = _enforce_path(path)
-        entries = sorted(target.iterdir())
-        lines = []
-        for e in entries:
-            prefix = "d " if e.is_dir() else "f "
-            lines.append(prefix + e.name)
-        return "\n".join(lines) if lines else "(empty directory)"
+        try:
+            target = _enforce_path(path)
+            entries = sorted(target.iterdir())
+            lines = []
+            for e in entries:
+                prefix = "d " if e.is_dir() else "f "
+                lines.append(prefix + e.name)
+            return "\n".join(lines) if lines else "(empty directory)"
+        except FileNotFoundError:
+            return f"[ERROR] Directory not found: '{path}'. Use list_directory to see available directories."
+        except NotADirectoryError:
+            return f"[ERROR] '{path}' is a file, not a directory. Use read_file to read it."
+        except ValueError as e:
+            return f"[ERROR] {e}"
 
     def run_command(command: str, timeout_seconds: int = 120) -> str:
         """Execute a shell command in the workspace directory.
         Returns combined stdout and stderr."""
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-        output = ""
-        if result.stdout:
-            output += result.stdout
-        if result.stderr:
-            output += "\n[stderr]\n" + result.stderr
-        output += f"\n[exit code: {result.returncode}]"
-        return output.strip()
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            output = ""
+            if result.stdout:
+                output += result.stdout
+            if result.stderr:
+                output += "\n[stderr]\n" + result.stderr
+            output += f"\n[exit code: {result.returncode}]"
+            return output.strip()
+        except subprocess.TimeoutExpired:
+            return f"[ERROR] Command timed out after {timeout_seconds} seconds: '{command}'"
+        except OSError as e:
+            return f"[ERROR] Failed to execute command: {e}"
 
     return [read_file, write_file, list_directory, run_command]
 ```

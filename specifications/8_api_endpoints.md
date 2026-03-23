@@ -12,7 +12,7 @@ All request and response bodies are `application/json` unless otherwise noted.
 All errors return an appropriate HTTP status code with a plain message:
 ```json
 {
-  "message": "Agent 'frontend_dev' already exists in organization 'react_app'."
+  "detail": "Agent 'frontend_dev' already exists in organization 'react_app'."
 }
 ```
 
@@ -371,18 +371,8 @@ Create a new task.
 | `description` | string | no | The task spec / detailed description. If omitted, defaults to the `title`. |
 
 **Response `201`**
-```json
-{
-  "id": "REAC-0003",
-  "organization": "react_app",
-  "title": "Implement dark mode toggle",
-  "description": "Add a dark mode toggle to the header...",
-  "status": "open",
-  "assignee": "frontend_dev",
-  "queued_at": "2026-03-22T14:30:00Z",
-  "created_at": "2026-03-22T14:30:00Z"
-}
-```
+
+Returns the full TaskDetail response (same shape as `GET /api/tasks/:id`), including timeline and cost fields.
 
 The task ID is always `<ORG_ACRONYM>-<NUMBER>` where the number portion is a sequential, zero-padded integer (e.g., `REAC-0001`, `REAC-0002`, `REAC-0003`).
 
@@ -496,8 +486,10 @@ Append a comment to a task as the human user.
 | `body` | string | yes | The comment text. May contain `@agent_name` or `@user` tags. |
 
 **Behavior:**
-- If the body contains a valid `@agent_name` tag (first tag rule), the server updates `assignee` to that agent, sets `status='open'`, and sets `queued_at` to `now()`.
-- If no `@` tag is present, the comment is appended with no state change.
+- The server applies the "First Valid Tag" algorithm: extracts all `@tag` candidates from the body, validates each against the task's organization roster + `"user"`, and selects the first valid one.
+- If a valid tag is found, the server updates `assignee` to that target, sets `status='open'`, and sets `queued_at` to `now()`.
+- If tags are present but **none** resolve to a valid agent or `"user"`, the server returns 404 (no DB changes). This gives immediate feedback that the `@` mention did not resolve.
+- If no `@` tags are present at all, the comment is appended with no state change.
 
 **Response `201`**
 ```json
@@ -518,7 +510,7 @@ Append a comment to a task as the human user.
 **Errors**
 | Status | Condition |
 |---|---|
-| 404 | Task does not exist, or `@` tag references a non-existent agent in the task's organization. |
+| 404 | Task does not exist, or all `@` tags in the body failed to resolve to a valid agent in the task's organization. |
 | 409 | Task is `in_progress` (must preempt first), `done` (must reopen first), or `canceled` (permanently locked). |
 | 422 | Missing `body`. |
 

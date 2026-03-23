@@ -18,8 +18,8 @@ class DispatcherConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     openrouter_api_key: str = ""
-    default_model: str = "anthropic/claude-3-5-sonnet-20241022"
-    assistant_model: str = "anthropic/claude-3-5-sonnet-20241022"
+    default_model: str = "minimax/minimax-m2.7"
+    assistant_model: str = "minimax/minimax-m2.7"
 
 class LoggingConfig(BaseModel):
     level: str = "INFO"
@@ -49,8 +49,8 @@ default_max_iterations = 50
 
 [llm]
 openrouter_api_key = "{api_key}"
-default_model = "anthropic/claude-3-5-sonnet-20241022"
-assistant_model = "anthropic/claude-3-5-sonnet-20241022"
+default_model = "minimax/minimax-m2.7"
+assistant_model = "minimax/minimax-m2.7"
 
 [logging]
 level = "INFO"

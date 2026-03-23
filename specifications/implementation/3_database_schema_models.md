@@ -265,7 +265,6 @@ class AgentUpdate(BaseModel):
     boss: Optional[str] = None  # null means promote to root
     instructions_path: Optional[str] = None
     max_iterations: Optional[int] = None
-    _validate_name = field_validator("name")(validate_snake_case)
 
 class AgentSummary(BaseModel):
     name: str

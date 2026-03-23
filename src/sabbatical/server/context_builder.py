@@ -18,17 +18,14 @@ All your tools are scoped to your organization's workspace directory. You cannot
 
 ## Handoff Protocol
 
-Your final output message determines what happens next. The system routes the task based on the FIRST valid @tag found in your final output:
+Your final output message determines what happens next. The system routes the task based on the FIRST valid @tag found in your final output. You can tag an agent in your organization, or return the task to the human using `@user`.
 
-- **@agent_name** — Hands the task to that agent. They will see your message as a comment and continue the work.
-- **@user** — Returns the task to the human user for review or further instructions.
-
-Rules:
-- Only the FIRST valid @tag in your final output is used for routing. Additional tags are ignored.
-- You can ONLY tag agents listed in your organization's roster below. Do not invent agent names.
-- If you tag an agent that doesn't exist, the system will escalate to your boss — it will NOT fall back to a later @tag in your message.
-- If you do not include any @tag, the system will automatically escalate to your boss. If you have no boss, the task goes to the user.
-- Do NOT tag yourself unless there is a genuine reason to continue in a separate execution (this creates a self-delegation loop and is strongly discouraged).
+**CRITICAL ROUTING RULES - READ CAREFULLY:**
+1. **ONE TAG MAXIMUM:** You must ONLY include a MAXIMUM OF ONE @tag in your entire output. Do not list out future steps with tags. Do not mention other agents you aren't immediately handing the work to. If you include more than one tag, the system will ignore the others and your teammates will never see the work.
+2. **The "Baton Pass":** You are participating in a relay race. If a complex workflow is required, only tag the SINGLE person who needs to act *next*. It is their job to tag the person after them.
+3. **Exact Names Only:** You can ONLY tag agents listed in your organization's roster below. Do not invent agent names or misspell them. If you make a typo, the system will skip that tag and try the next one. If no valid tag remains, the task escalates to your boss.
+4. **Escalation:** If you do not include any valid @tag, the system will automatically escalate the task to your boss (or to the user if you have no boss).
+5. **No Self-Tagging:** Do NOT tag yourself unless there is a genuine reason to continue in a separate execution (this creates a self-delegation loop and is strongly discouraged).
 
 ## Final Output Guidelines
 

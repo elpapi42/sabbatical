@@ -62,7 +62,7 @@ You are now executing this task. Do your work using the available tools, then wr
 
     user_message = types.Content(
         role="user",
-        parts=[types.Part(text=block_d)],
+        parts=[types.Part.from_text(text=block_d)],
     )
 
     return system_prompt, user_message
@@ -70,22 +70,55 @@ You are now executing this task. Do your work using the available tools, then wr
 
 ---
 
-## 12. Tag Parser
+## 12. Tag Parser — "First Valid Tag" Algorithm
 
 ### `server/tag_parser.py`
+
+The tag parser implements a multi-pass extraction algorithm to find the first **valid** routing target in a block of text. This makes routing fault-tolerant against LLM hallucinations and typos.
 
 ```python
 import re
 
 TAG_PATTERN = re.compile(r"@([a-z][a-z0-9_]*)\b")
 
-def parse_first_tag(text: str) -> str | None:
-    """Extract the first valid @tag from text. Returns the name without @, or None."""
-    match = TAG_PATTERN.search(text)
-    return match.group(1) if match else None
+def extract_all_tags(text: str) -> list[str]:
+    """Extract all @tag candidates from text in order of appearance."""
+    return TAG_PATTERN.findall(text)
+
+def resolve_first_valid_tag(text: str, valid_names: set[str]) -> tuple[str | None, list[str]]:
+    """Extract all tags, then return the first one in valid_names.
+    Returns (first_valid_tag_or_None, all_extracted_tags)."""
+    all_tags = extract_all_tags(text)
+    for tag in all_tags:
+        if tag in valid_names:
+            return tag, all_tags
+    return None, all_tags
 ```
 
-The `@user` literal is also matched by this pattern (since `user` matches `[a-z][a-z0-9_]*`). The caller distinguishes `user` from agent names.
+The `valid_names` set is built by the caller: `{active agent names in org} | {"user"}`. The regex only matches lowercase snake_case identifiers, matching the agent naming convention.
+
+### Algorithm Steps
+1. **Extraction:** Regex extracts every `@tag` candidate, preserving chronological order.
+2. **Validation:** Each candidate is checked against the organization's active roster + the reserved `"user"` literal. Invalid tags (hallucinated names, typos, removed agents) are skipped.
+3. **Selection:** The first valid tag is selected for routing.
+
+### Caller Behavior
+The two-element return allows callers to distinguish three states:
+- `(tag, [...])` — Valid tag found, route to it.
+- `(None, [some, tags])` — Tags present but none valid.
+  - **Agent output:** Escalate to boss or user.
+  - **User comment:** Return 404 error (user gets feedback).
+- `(None, [])` — No tags at all.
+  - **Agent output:** Escalate to boss or user.
+  - **User comment:** Append comment with no state change.
+
+### Multi-Tag Warning (Agent Output)
+When an agent's final output contains multiple valid tags, the system routes to the first valid tag and inserts a system comment: `[SYSTEM: Multiple valid tags detected in output. Only @first was used. Ignored: @second, @third]`. This aids debugging when agents violate the single-tag rule.
+
+### Edge Cases
+- **Typo + valid fallback:** `@front_end_devv please fix this, or @user take a look.` → `@front_end_devv` is invalid (not in roster), skipped. `@user` is valid, task routes to user.
+- **All invalid:** `@ghost_agent do something` → No valid tag. Agent output: escalate. User comment: 404.
+- **Multiple valid:** `@database_agent setup the schema, then @backend_dev build the routes.` → Routes to `@database_agent`, ignores `@backend_dev`, inserts warning comment.
 
 ---
 

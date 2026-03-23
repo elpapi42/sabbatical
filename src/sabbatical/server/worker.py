@@ -7,7 +7,7 @@ from pathlib import Path
 from sabbatical.agent.runtime import create_agent_runner
 from sabbatical.server.context_builder import build_context_payload
 from sabbatical.server.cost import openrouter_cost
-from sabbatical.server.tag_parser import parse_first_tag
+from sabbatical.server.tag_parser import resolve_first_valid_tag
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,27 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                 },
             )
 
-        tag = parse_first_tag(final_text)
+        # Build the set of valid routing targets for this organization
+        roster = await db.fetch_all(
+            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            {"org": org_name},
+        )
+        valid_names = {r["name"] for r in roster} | {"user"}
+
+        tag, all_tags = resolve_first_valid_tag(final_text, valid_names)
+
+        # Warn if multiple valid tags were found (agent violated single-tag rule)
+        valid_tags_found = [t for t in all_tags if t in valid_names]
+        if len(valid_tags_found) > 1:
+            ignored = ", ".join(f"@{t}" for t in valid_tags_found[1:])
+            await db.execute(
+                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
+                {
+                    "task_id": task_id,
+                    "body": f"[SYSTEM: Multiple valid tags detected in output. Only @{tag} was used. Ignored: {ignored}]",
+                    "now": now,
+                },
+            )
 
         if tag == "user":
             logger.info("routing run_id=%s -> user", run_id)
@@ -267,46 +287,18 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                 "UPDATE tasks SET status='open', assignee='user' WHERE id = :id",
                 {"id": task_id},
             )
-        elif tag:
-            agent = await db.fetch_one(
-                "SELECT name FROM agents WHERE name = :tag AND organization_name = :org AND is_removed = 0",
-                {"tag": tag, "org": org_name},
+            return
+
+        if tag:
+            logger.info("routing run_id=%s -> %s", run_id, tag)
+            await db.execute(
+                "UPDATE tasks SET status='open', assignee=:assignee, queued_at=:now WHERE id = :id",
+                {"assignee": tag, "now": now, "id": task_id},
             )
-            if agent:
-                logger.info("routing run_id=%s -> %s", run_id, tag)
-                await db.execute(
-                    "UPDATE tasks SET status='open', assignee=:assignee, queued_at=:now WHERE id = :id",
-                    {"assignee": tag, "now": now, "id": task_id},
-                )
-            elif agent_boss:
-                logger.info("routing run_id=%s -> %s (boss escalation)", run_id, agent_boss)
-                await db.execute(
-                    "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
-                    {
-                        "task_id": task_id,
-                        "body": "[SYSTEM: No valid tag detected. Escalating to boss.]",
-                        "now": now,
-                    },
-                )
-                await db.execute(
-                    "UPDATE tasks SET status='open', assignee=:assignee, queued_at=:now WHERE id = :id",
-                    {"assignee": agent_boss, "now": now, "id": task_id},
-                )
-            else:
-                logger.info("routing run_id=%s -> user (no tag, no boss)", run_id)
-                await db.execute(
-                    "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
-                    {
-                        "task_id": task_id,
-                        "body": "[SYSTEM: No valid tag detected. Assigning to user.]",
-                        "now": now,
-                    },
-                )
-                await db.execute(
-                    "UPDATE tasks SET status='open', assignee='user' WHERE id = :id",
-                    {"id": task_id},
-                )
-        elif agent_boss:
+            return
+
+        # No valid tag found: escalate to boss or fall back to user
+        if agent_boss:
             logger.info("routing run_id=%s -> %s (boss escalation)", run_id, agent_boss)
             await db.execute(
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",

@@ -34,11 +34,11 @@ A task must strictly exist in one of the following five states:
 * **`in_progress` → `open` (Agent to User)**
   * *Trigger:* The executing agent drops an `@user` tag.
   * *Action:* The Dispatcher finalizes the active Run (status=`success`), appends the agent's final output as a Comment, sets `assignee='user'`, changes status to `open`, and kills the worker thread. `queued_at` is not updated (the Dispatcher ignores user-assigned tasks).
-* **`in_progress` → `open` (Orphaned / Missing Tag — Boss Escalation)**
-  * *Trigger:* The executing agent finishes its output but fails to include any valid `@` tag, and the agent has a Boss.
+* **`in_progress` → `open` (No Valid Tag — Boss Escalation)**
+  * *Trigger:* The executing agent finishes its output but no tag in the output resolves to a valid agent in the org roster or `"user"` (tags may be present but all invalid — typos, hallucinations), and the agent has a Boss.
   * *Action:* The Dispatcher finalizes the active Run (status=`success`), appends the agent's output as a Comment, appends a system note `[SYSTEM: No valid tag detected. Escalating to boss.]`, sets `assignee` to the agent's Boss, changes status to `open`, sets `queued_at` to `now()`, and kills the worker thread.
-* **`in_progress` → `open` (Orphaned / Missing Tag — Root Agent)**
-  * *Trigger:* The executing agent finishes its output but fails to include any valid `@` tag, and the agent has no Boss (root agent).
+* **`in_progress` → `open` (No Valid Tag — Root Agent)**
+  * *Trigger:* The executing agent finishes its output but no tag in the output resolves to a valid agent in the org roster or `"user"`, and the agent has no Boss (root agent).
   * *Action:* The Dispatcher finalizes the active Run (status=`success`), appends the agent's output as a Comment, appends a system note `[SYSTEM: No valid tag detected. Assigning to user.]`, sets `assignee='user'`, changes status to `open`, and kills the worker thread. `queued_at` is not updated.
 
 ### C. Friction & Failures
@@ -95,14 +95,23 @@ A task must strictly exist in one of the following five states:
 ### Protocol Philosophy
 Handoffs rely on atomic database updates triggered by explicit tags (`@agent_name` or `@user`) within the task's comment thread. The `@` prefix is a comment-level parsing convention only; at the database level, the `assignee` field stores the plain name (e.g., `database_agent`, `user`). Every handoff implies a release of the Mutex Lock (`status='open'`). When the new assignee is an agent, `queued_at` is set to `now()` to place the task back in the dispatch queue.
 
-### The "First Tag" Rule
-To prevent routing confusion if an agent mentions multiple peers, the Dispatcher routes based *only* on the **first valid tag** found in the agent's final output message. Both `@agent_name` and `@user` are valid tags under this rule — whichever appears first wins.
+### The "First Valid Tag" Rule
+The Dispatcher and the API Server use the same multi-pass extraction algorithm (`resolve_first_valid_tag`) to determine the routing target:
+
+1. **Extract** all `@tag` candidates from the text using the regex `@([a-z][a-z0-9_]*)\b`, preserving order.
+2. **Validate** each candidate against the task's organization roster (active agents, `is_removed=false`) plus the reserved `"user"` literal. Invalid tags (hallucinated names, typos, cross-organization agents) are discarded.
+3. **Select** the first valid tag for routing.
+
+This makes routing fault-tolerant: if an agent writes `@front_end_devv please fix, or @user take a look`, the typo is skipped and the task routes to `@user`.
+
+### Multi-Tag Warning
+The system prompt instructs agents to include **at most one** `@tag` per output. If an agent includes multiple valid tags, the system routes to the first and inserts a system comment: `[SYSTEM: Multiple valid tags detected in output. Only @first was used. Ignored: @second, ...]`.
 
 ### Tag Parsing Scope
 The Dispatcher only parses `@` tags from the agent's **final output message** (the last message produced after all tool use is complete). Tags that appear in intermediate reasoning, tool call arguments, or tool outputs are **never parsed** by the Dispatcher.
 
 ### Self-Tagging
-An agent may tag itself (e.g., `@self_name`). The system allows this but does not promote it — agent prompts should discourage unnecessary self-delegation to avoid loops.
+An agent may tag itself (e.g., `@self_name`). The system allows this but does not promote it — agent prompts discourage unnecessary self-delegation to avoid loops.
 
 ### Agent-to-Agent Execution Flow
 1. Agent writes final output with `@database_agent`.
@@ -118,8 +127,10 @@ An agent may tag itself (e.g., `@self_name`). The system allows this but does no
 
 ### Human-to-Agent Delegation
 * The user executes `task comment <id> "@agent_name <message>"`.
-* The API Server parses the `@agent_name` tag from the comment, writes the comment to the DB, updates `assignee`, sets `status='open'`, and sets `queued_at` to `now()`.
-* If the `@` tag references a non-existent agent, the API Server immediately rejects the request with a validation error before any DB state changes occur.
+* The API Server applies the same "First Valid Tag" algorithm: extracts all tags, validates against the org roster + `"user"`, and selects the first valid one.
+* If a valid tag is found, the comment is written to the DB, `assignee` is updated, `status='open'`, and `queued_at` is set to `now()`.
+* If tags are present but **none** resolve to a valid agent or `"user"`, the API Server immediately rejects the request with a 404 error before any DB state changes occur. This gives the user immediate feedback that their `@` mention did not resolve.
+* If no `@` tags are present at all, the comment is appended with no state change.
 
 ### Commenting Constraints
 * The user cannot comment on an `in_progress` task. The user must first run `task preempt <id>` to reclaim the task. This prevents conflicting writes between the human and the active worker thread.
@@ -164,7 +175,7 @@ Hierarchy powers graceful degradation when an agent fails to route a task proper
 6. **Human Override:** The user can preempt any `in_progress` task via `task preempt <id>`, returning it to `open` assigned to `user`.
 7. **Dispatcher Blind Spots:** The Dispatcher strictly ignores tasks where `assignee` is `user`.
 8. **Final Output Parsing Only:** The Dispatcher parses `@` tags exclusively from the agent's **final output message** (the last message after all tool use completes). Tags in intermediate reasoning, tool calls, or tool outputs are never parsed. The `@` prefix is stripped before storing in the `assignee` field.
-9. **First Tag Rule:** When multiple `@` tags appear in the final output, the Dispatcher routes based on the **first valid tag** only. Both `@agent_name` and `@user` are valid tags under this rule.
+9. **First Valid Tag Rule:** When `@` tags appear in text, the system extracts all candidates, validates each against the org roster + `"user"`, and routes based on the **first valid tag** only. Invalid tags (typos, hallucinations) are silently skipped. If multiple valid tags exist, only the first is used and a system warning comment is appended.
 10. **Organization-Scoped Routing:** Agent `@` tags are validated against the task's organization roster. Only agents belonging to the same organization as the task can be tagged. Organizations are fully isolated — no cross-organization handoffs.
 11. **Self-Tagging Allowed:** An agent may tag itself. The system permits this but does not promote it.
 12. **Canceled State Immutability:** Tasks in `canceled` status are permanently locked. No further comments, state changes, or reassignments are permitted.

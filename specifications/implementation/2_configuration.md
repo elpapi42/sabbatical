@@ -20,8 +20,12 @@ default_max_iterations = 50
 
 [llm]
 openrouter_api_key = "sk-or-..."
-default_model = "anthropic/claude-sonnet-4-20250514"
-assistant_model = "anthropic/claude-sonnet-4-20250514"
+default_model = "minimax/minimax-m2.7"
+assistant_model = "minimax/minimax-m2.7"
+
+[logging]
+level = "INFO"
+file = "~/.sabbatical/logs/sabbatical.log"
 ```
 
 ### `config.py`
@@ -46,13 +50,18 @@ class DispatcherConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     openrouter_api_key: str
-    default_model: str = "anthropic/claude-sonnet-4-20250514"
-    assistant_model: str = "anthropic/claude-sonnet-4-20250514"
+    default_model: str = "minimax/minimax-m2.7"
+    assistant_model: str = "minimax/minimax-m2.7"
+
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+    file: str = str(SABBATICAL_DIR / "logs" / "sabbatical.log")
 
 class SabbaticalConfig(BaseModel):
     server: ServerConfig = ServerConfig()
     dispatcher: DispatcherConfig = DispatcherConfig()
     llm: LLMConfig
+    logging: LoggingConfig = LoggingConfig()
 
 def load_config() -> SabbaticalConfig:
     with open(CONFIG_PATH, "rb") as f:

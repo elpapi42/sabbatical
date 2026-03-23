@@ -144,13 +144,15 @@ The `server up` command spawns the Uvicorn process in the background. To enable 
 ```python
 # server/routers/status.py
 
-@router.post("/api/shutdown")
+import os
+import signal
+
+@router.post("/shutdown")
 async def shutdown(request: Request):
     """Trigger graceful server shutdown."""
-    # Signal the asyncio event loop to stop
     request.app.state.dispatcher.shutdown()
-    # Give dispatcher time to flush, then stop uvicorn
-    asyncio.get_event_loop().call_later(1.0, _stop_server)
+    # Schedule SIGTERM after a brief delay to allow response to be sent
+    asyncio.get_event_loop().call_later(1.0, lambda: os.kill(os.getpid(), signal.SIGTERM))
     return {"message": "Shutting down"}
 ```
 
@@ -160,38 +162,15 @@ A PID file at `~/.sabbatical/server.pid` tracks the running process. The `server
 
 ## 18. Error Handling Conventions
 
-All API errors return the standard `{"message": "..."}` body. FastAPI exception handlers:
+All API errors use FastAPI's built-in `HTTPException`, which returns the standard `{"detail": "..."}` body:
 
 ```python
 from fastapi import HTTPException
-from fastapi.responses import JSONResponse
 
-class SabbaticalError(Exception):
-    def __init__(self, status_code: int, message: str):
-        self.status_code = status_code
-        self.message = message
-
-# 404 — NOT_FOUND
-class NotFoundError(SabbaticalError):
-    def __init__(self, message: str):
-        super().__init__(404, message)
-
-# 409 — CONFLICT / ILLEGAL_STATE
-class ConflictError(SabbaticalError):
-    def __init__(self, message: str):
-        super().__init__(409, message)
-
-# 422 — VALIDATION
-class ValidationError(SabbaticalError):
-    def __init__(self, message: str):
-        super().__init__(422, message)
-
-@app.exception_handler(SabbaticalError)
-async def sabbatical_error_handler(request, exc: SabbaticalError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"message": exc.message},
-    )
+# Usage in routers:
+raise HTTPException(status_code=404, detail="Organization 'foo' not found.")
+raise HTTPException(status_code=409, detail="Agent is assigned to an in_progress task.")
+raise HTTPException(status_code=422, detail="Name must be snake_case.")
 ```
 
 ---
@@ -226,5 +205,5 @@ sabbatical.cli                # CLI command execution
 
 ### Configuration
 
-Logging level defaults to `INFO`. Set via environment variable `SABBATICAL_LOG_LEVEL` or a future config option. Logs are written to stderr (not stdout, to avoid mixing with CLI output).
+Logging level defaults to `INFO`. Configured via the `[logging]` section in `~/.sabbatical/config.toml`. Logs are written to stderr (not stdout, to avoid mixing with CLI output).
 

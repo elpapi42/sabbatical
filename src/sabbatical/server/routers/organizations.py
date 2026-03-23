@@ -174,5 +174,9 @@ async def delete_organization(name: str, db=Depends(get_db)):
                 },
             )
 
-        # Due to ON DELETE CASCADE, this deletes agents, tasks, comments, runs, sessions, session_messages
+        # Explicitly delete agents first to avoid self-referential FK conflict
+        # (boss FK's ON DELETE SET NULL conflicts with NOT NULL on organization_name)
+        await db.execute("UPDATE agents SET boss = NULL WHERE organization_name = :org", {"org": name})
+        await db.execute("DELETE FROM agents WHERE organization_name = :org", {"org": name})
+        # Remaining cascades (tasks, comments, runs, sessions) handled by ON DELETE CASCADE
         await db.execute("DELETE FROM organizations WHERE name = :name", {"name": name})

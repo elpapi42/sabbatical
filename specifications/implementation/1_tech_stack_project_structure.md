@@ -58,6 +58,7 @@ sabbatical/
 │       ├── config.py                # Global config loading from ~/.sabbatical/
 │       ├── db.py                    # Database connection via `databases`, SQLAlchemy table defs
 │       ├── models.py                # Pydantic models (shared across server + CLI)
+│       ├── logging_setup.py            # Logging configuration (rotating file + stderr)
 │       │
 │       ├── server/
 │       │   ├── __init__.py
@@ -98,21 +99,6 @@ sabbatical/
 │           ├── run_cmds.py          # run view/list
 │           ├── chat_cmds.py         # chat new/list/resume
 │           └── formatters.py        # Table/tree output formatting
-│
-└── tests/
-    ├── conftest.py
-    ├── test_dispatcher.py
-    ├── test_worker.py
-    ├── test_tag_parser.py
-    ├── test_context_builder.py
-    ├── test_routers/
-    │   ├── test_organizations.py
-    │   ├── test_agents.py
-    │   ├── test_tasks.py
-    │   ├── test_runs.py
-    │   └── test_sessions.py
-    └── test_cli/
-        └── ...
 ```
 
 ---
