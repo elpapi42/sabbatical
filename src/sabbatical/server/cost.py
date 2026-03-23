@@ -1,0 +1,75 @@
+import databases
+
+
+async def sum_run_costs(db: databases.Database, **filters) -> dict:
+    where_clauses = []
+    values = {}
+    for key, value in filters.items():
+        where_clauses.append(f"{key} = :{key}")
+        values[key] = value
+
+    where = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+    row = await db.fetch_one(
+        query=f"""
+            SELECT COALESCE(SUM(consumed_input_tokens), 0) as input_tokens,
+                   COALESCE(SUM(consumed_output_tokens), 0) as output_tokens,
+                   COALESCE(SUM(total_cost), 0.0) as cost
+            FROM runs
+            WHERE {where}
+        """,
+        values=values,
+    )
+
+    return {
+        "consumed_input_tokens": row["input_tokens"],
+        "consumed_output_tokens": row["output_tokens"],
+        "total_cost": row["cost"],
+    }
+
+
+async def organization_total_cost(db: databases.Database, org_name: str) -> dict:
+    runs = await sum_run_costs(db, organization_name=org_name)
+    session_row = await db.fetch_one(
+        query="""
+            SELECT COALESCE(SUM(consumed_input_tokens), 0) as input_tokens,
+                   COALESCE(SUM(consumed_output_tokens), 0) as output_tokens,
+                   COALESCE(SUM(total_cost), 0.0) as cost
+            FROM sessions
+            WHERE organization_scope = :org_name
+        """,
+        values={"org_name": org_name},
+    )
+
+    return {
+        "consumed_input_tokens": runs["consumed_input_tokens"]
+        + session_row["input_tokens"],
+        "consumed_output_tokens": runs["consumed_output_tokens"]
+        + session_row["output_tokens"],
+        "total_cost": runs["total_cost"] + session_row["cost"],
+    }
+
+
+async def system_total_cost(db: databases.Database) -> dict:
+    runs = await sum_run_costs(db)
+    session_row = await db.fetch_one(
+        query="""
+            SELECT COALESCE(SUM(consumed_input_tokens), 0) as input_tokens,
+                   COALESCE(SUM(consumed_output_tokens), 0) as output_tokens,
+                   COALESCE(SUM(total_cost), 0.0) as cost
+            FROM sessions
+        """
+    )
+
+    return {
+        "consumed_input_tokens": runs["consumed_input_tokens"]
+        + session_row["input_tokens"],
+        "consumed_output_tokens": runs["consumed_output_tokens"]
+        + session_row["output_tokens"],
+        "total_cost": runs["total_cost"] + session_row["cost"],
+    }
+
+
+def openrouter_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    # Future: parse from OpenRouter response header
+    return 0.0
