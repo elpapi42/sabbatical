@@ -1,6 +1,9 @@
+import logging
 from pathlib import Path
 
 from google.genai import types
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_RULES_TEMPLATE = """You are an autonomous AI agent in the Sabbatical orchestration system. You are executing a task within your organization's workspace. Use your tools to do real, concrete work — read files, write code, run commands.
 
@@ -101,11 +104,11 @@ Purpose: {org_row["description"] or "Not specified"}
 
     # Block C
     instructions_path = Path(agent["instructions_path"])
-    instructions = (
-        instructions_path.read_text()
-        if instructions_path.exists()
-        else "(Instructions file not found)"
-    )
+    if instructions_path.exists():
+        instructions = instructions_path.read_text()
+    else:
+        logger.warning("instructions file not found path=%s agent=%s", instructions_path, agent["name"])
+        instructions = "(Instructions file not found)"
 
     boss_text = (
         f"Your Boss: @{agent['boss']}"

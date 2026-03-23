@@ -142,7 +142,7 @@ def create_assistant_tools(db, organization_scope=None):
                 acronym = acronym.ljust(4, acronym[-1] if acronym else "X")
             task_id = f"{acronym}-{seq['next_number'] - 1:04d}"
 
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             queued_at = now if assignee != "user" else None
 
             await db.execute(

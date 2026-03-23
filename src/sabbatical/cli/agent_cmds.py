@@ -30,17 +30,25 @@ def add(
     max_iterations: Optional[int] = typer.Option(
         None, "--max-iterations", help="LLM turn iteration limit"
     ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="LLM model override (e.g. anthropic/claude-3-5-sonnet-20241022)"
+    ),
 ):
     """Add a new agent to an organization."""
     with get_client() as client:
         try:
-            payload = {"name": name, "instructions_path": instructions_path}
+            payload: dict[str, object] = {
+                "name": name,
+                "instructions_path": instructions_path,
+            }
             if description:
                 payload["description"] = description
             if boss:
                 payload["boss"] = boss
             if max_iterations is not None:
                 payload["max_iterations"] = max_iterations
+            if model is not None:
+                payload["model"] = model
             resp = client.post(f"/organizations/{organization}/agents", json=payload)
             resp.raise_for_status()
             typer.echo(f"Added agent: {name} to {organization}")
@@ -64,11 +72,12 @@ def list_agents(
             )
             resp.raise_for_status()
             data = resp.json()["agents"]
-            headers = ["Name", "Boss", "Max Iterations", "Cost ($)"]
+            headers = ["Name", "Boss", "Model", "Max Iterations", "Cost ($)"]
             rows = [
                 [
                     a["name"],
                     a["boss"] or "None",
+                    a.get("model") or "(default)",
                     str(a["max_iterations"]),
                     f"${a['total_cost']:.2f}",
                 ]
@@ -94,6 +103,7 @@ def view(
             typer.echo(f"Boss: {data['boss'] or 'None'}")
             subordinates = ", ".join([s["name"] for s in data.get("subordinates", [])])
             typer.echo(f"Subordinates: {subordinates or 'None'}")
+            typer.echo(f"Model: {data.get('model') or '(default)'}")
             typer.echo(f"Instructions Path: {data['instructions_path']}")
             typer.echo(f"Max Iterations: {data['max_iterations']}")
             typer.echo(f"Cost: ${data['total_cost']:.2f}")
@@ -119,9 +129,12 @@ def edit(
     max_iterations: Optional[int] = typer.Option(
         None, "--max-iterations", help="Update iteration limit"
     ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="LLM model override (use 'default' to clear)"
+    ),
 ):
     """Modify an agent's profile."""
-    if not any([description, boss, instructions_path, max_iterations is not None]):
+    if not any([description, boss, instructions_path, max_iterations is not None, model is not None]):
         typer.echo("Nothing to update.")
         return
     with get_client() as client:
@@ -135,6 +148,8 @@ def edit(
                 payload["instructions_path"] = instructions_path
             if max_iterations is not None:
                 payload["max_iterations"] = max_iterations
+            if model is not None:
+                payload["model"] = None if model.lower() == "default" else model
             resp = client.patch(
                 f"/organizations/{organization}/agents/{name}", json=payload
             )

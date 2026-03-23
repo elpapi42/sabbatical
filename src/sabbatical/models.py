@@ -53,6 +53,7 @@ class AgentNode(BaseModel):
     description: Optional[str]
     instructions_path: str
     max_iterations: int
+    model: Optional[str]
     is_removed: bool
     subordinates: list[AgentNode] = []
 
@@ -76,6 +77,7 @@ class AgentCreate(BaseModel):
     boss: Optional[str] = None
     instructions_path: str
     max_iterations: Optional[int] = None
+    model: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -88,6 +90,7 @@ class AgentUpdate(BaseModel):
     boss: Optional[str] = None  # null means promote to root
     instructions_path: Optional[str] = None
     max_iterations: Optional[int] = None
+    model: Optional[str] = None
 
 
 class AgentSummary(BaseModel):
@@ -97,6 +100,7 @@ class AgentSummary(BaseModel):
     boss: Optional[str]
     instructions_path: str
     max_iterations: int
+    model: Optional[str]
     is_removed: bool
     consumed_input_tokens: int
     consumed_output_tokens: int

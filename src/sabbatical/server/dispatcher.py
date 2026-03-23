@@ -1,9 +1,12 @@
 import asyncio
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from sabbatical.server.worker import run_agent_worker
+
+logger = logging.getLogger(__name__)
 
 
 class Dispatcher:
@@ -36,6 +39,7 @@ class Dispatcher:
     async def _poll_once(self):
         max_conc = self._config.dispatcher.max_concurrency
         if self.active_count >= max_conc:
+            logger.debug("dispatcher at capacity active=%d max=%d", self.active_count, max_conc)
             return
 
         async with self._db.transaction():
@@ -58,13 +62,20 @@ class Dispatcher:
                 row["assignee"],
             )
 
+            agent_row = await self._db.fetch_one(
+                query="SELECT model FROM agents WHERE name = :name AND organization_name = :org",
+                values={"name": agent_name, "org": org_name},
+            )
+            model = (agent_row["model"] if agent_row and agent_row["model"] else
+                     self._config.llm.default_model)
+
             await self._db.execute(
                 query="UPDATE tasks SET status = 'in_progress' WHERE id = :id",
                 values={"id": task_id},
             )
 
             run_id = hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:12]
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             await self._db.execute(
                 query="""
                     INSERT INTO runs (id, task_id, agent_name, organization_name,
@@ -77,9 +88,14 @@ class Dispatcher:
                     "agent_name": agent_name,
                     "org_name": org_name,
                     "now": now,
-                    "model": self._config.llm.default_model,
+                    "model": model,
                 },
             )
+
+        logger.info(
+            "task picked up task_id=%s agent=%s org=%s run_id=%s",
+            task_id, agent_name, org_name, run_id
+        )
 
         worker_task = asyncio.create_task(
             run_agent_worker(
@@ -97,16 +113,25 @@ class Dispatcher:
         done = [tid for tid, t in self._active_workers.items() if t.done()]
         for tid in done:
             task = self._active_workers.pop(tid)
-            exc = task.exception() if not task.cancelled() else None
+            if task.cancelled():
+                logger.info("worker finished task_id=%s outcome=cancelled", tid)
+            else:
+                exc = task.exception()
+                if exc is None:
+                    logger.info("worker finished task_id=%s outcome=success", tid)
+                else:
+                    logger.error("worker raised exception task_id=%s", tid, exc_info=exc)
 
     async def _graceful_shutdown(self):
+        logger.info("dispatcher shutting down active_workers=%d", len(self._active_workers))
+
         for task_id, worker_task in self._active_workers.items():
             worker_task.cancel()
 
         if self._active_workers:
             await asyncio.gather(*self._active_workers.values(), return_exceptions=True)
 
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
         interrupted_tasks = await self._db.fetch_all(
             query="SELECT id FROM tasks WHERE status = 'in_progress'"
@@ -128,6 +153,8 @@ class Dispatcher:
                 """,
                 values={"task_id": row["id"], "now": now},
             )
+
+        logger.info("dispatcher shutdown complete preempted=%d", len(interrupted_tasks))
 
     async def kill_worker(self, task_id: str) -> str | None:
         worker = self._active_workers.pop(task_id, None)

@@ -21,10 +21,15 @@ class LLMConfig(BaseModel):
     default_model: str = "anthropic/claude-3-5-sonnet-20241022"
     assistant_model: str = "anthropic/claude-3-5-sonnet-20241022"
 
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+    file: str = str(SABBATICAL_DIR / "logs" / "sabbatical.log")
+
 class SabbaticalConfig(BaseModel):
     server: ServerConfig = ServerConfig()
     dispatcher: DispatcherConfig = DispatcherConfig()
     llm: LLMConfig = LLMConfig()
+    logging: LoggingConfig = LoggingConfig()
 
 def load_config() -> SabbaticalConfig:
     if not SABBATICAL_DIR.exists():
@@ -46,9 +51,14 @@ default_max_iterations = 50
 openrouter_api_key = "{api_key}"
 default_model = "anthropic/claude-3-5-sonnet-20241022"
 assistant_model = "anthropic/claude-3-5-sonnet-20241022"
+
+[logging]
+level = "INFO"
+file = "{log_path}"
 """.format(
             db_path=str(SABBATICAL_DIR / "sabbatical.db").replace('\\', '\\\\'),
-            api_key=os.environ.get("OPENROUTER_API_KEY", "")
+            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            log_path=str(SABBATICAL_DIR / "logs" / "sabbatical.log").replace('\\', '\\\\')
         )
         CONFIG_PATH.write_text(default_toml)
 

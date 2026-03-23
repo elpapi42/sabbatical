@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from alembic import command as alembic_command
@@ -7,6 +8,7 @@ from fastapi import FastAPI
 
 from sabbatical.config import load_config
 from sabbatical.db import get_database
+from sabbatical.logging_setup import setup_logging
 from sabbatical.server.dispatcher import Dispatcher
 from sabbatical.server.routers import (
     agents,
@@ -28,7 +30,19 @@ def run_migrations(db_path: str):
 async def lifespan(app: FastAPI):
     config = load_config()
 
-    run_migrations(config.server.db_path)
+    # Setup logging before anything else
+    setup_logging(config.logging.level, config.logging.file)
+    logger = logging.getLogger(__name__)
+
+    logger.info(
+        "server starting host=%s port=%d db=%s model=%s",
+        config.server.host,
+        config.server.port,
+        config.server.db_path,
+        config.llm.default_model,
+    )
+
+    # run_migrations(config.server.db_path)
 
     db = await get_database(config.server.db_path)
 
@@ -44,6 +58,7 @@ async def lifespan(app: FastAPI):
     dispatcher.shutdown()
     await dispatcher_task
     await db.disconnect()
+    logger.info("server shutdown complete")
 
 
 def create_app() -> FastAPI:

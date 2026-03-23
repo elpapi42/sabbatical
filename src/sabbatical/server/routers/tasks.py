@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
@@ -19,7 +20,7 @@ router = APIRouter(tags=["Tasks"])
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def generate_task_id(organization_name: str, number: int) -> str:
@@ -90,9 +91,9 @@ async def create_task(task: TaskCreate, db=Depends(get_db)):
 
 @router.get("/tasks")
 async def list_tasks(
-    organization: str = None,
-    status: str = None,
-    assignee: str = None,
+    organization: Optional[str] = None,
+    status: Optional[str] = None,
+    assignee: Optional[str] = None,
     db=Depends(get_db),
 ):
     query = "SELECT * FROM tasks WHERE 1=1"

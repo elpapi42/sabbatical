@@ -67,8 +67,8 @@ async def add_agent(
         )
 
         await db.execute(
-            """INSERT INTO agents (name, organization_name, description, boss, instructions_path, max_iterations)
-               VALUES (:name, :org, :description, :boss, :path, :max_iter)""",
+            """INSERT INTO agents (name, organization_name, description, boss, instructions_path, max_iterations, model)
+               VALUES (:name, :org, :description, :boss, :path, :max_iter, :model)""",
             {
                 "name": agent.name,
                 "org": organization,
@@ -76,6 +76,7 @@ async def add_agent(
                 "boss": agent.boss,
                 "path": agent.instructions_path,
                 "max_iter": max_iter,
+                "model": agent.model,
             },
         )
 
@@ -86,6 +87,7 @@ async def add_agent(
         "boss": agent.boss,
         "instructions_path": agent.instructions_path,
         "max_iterations": max_iter,
+        "model": agent.model,
         "is_removed": False,
     }
 
@@ -121,6 +123,7 @@ async def list_agents(
                 boss=r["boss"],
                 instructions_path=r["instructions_path"],
                 max_iterations=r["max_iterations"],
+                model=r["model"],
                 is_removed=bool(r["is_removed"]),
                 **cost_data,
             ).model_dump()
@@ -159,6 +162,7 @@ async def get_agent(organization: str, name: str, db=Depends(get_db)):
         boss=agent["boss"],
         instructions_path=agent["instructions_path"],
         max_iterations=agent["max_iterations"],
+        model=agent["model"],
         is_removed=bool(agent["is_removed"]),
         instructions_content=instructions_content,
         subordinates=subordinates,
@@ -204,6 +208,9 @@ async def update_agent(
             updates["instructions_path"] = update.instructions_path
         if update.max_iterations is not None:
             updates["max_iterations"] = update.max_iterations
+        provided = update.model_dump(exclude_unset=True)
+        if "model" in provided:
+            updates["model"] = update.model
         if update.boss is not None:
             if update.boss == name:
                 return JSONResponse(

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from sabbatical.server.context_builder import build_context_payload
 from sabbatical.server.cost import openrouter_cost
 from sabbatical.server.tag_parser import parse_first_tag
 
+logger = logging.getLogger(__name__)
+
 
 class MaxIterationsExceeded(Exception):
     def __init__(self, count):
@@ -15,10 +18,15 @@ class MaxIterationsExceeded(Exception):
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
+    logger.info(
+        "run start run_id=%s task_id=%s agent=%s org=%s",
+        run_id, task_id, agent_name, org_name
+    )
+
     steps = []
     total_input_tokens = 0
     total_output_tokens = 0
@@ -52,10 +60,12 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             org_name=org_name,
         )
 
+        model = agent_row["model"] or config.llm.default_model
+
         runner, session_id = create_agent_runner(
             agent_name=agent_name,
             system_prompt=system_prompt,
-            model=config.llm.default_model,
+            model=model,
             openrouter_api_key=config.llm.openrouter_api_key,
             workspace_path=org_row["workspace_path"],
             max_iterations=agent_row["max_iterations"],
@@ -78,6 +88,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             if event.get_function_calls():
                 for fc in event.get_function_calls():
                     step_count += 1
+                    logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
                     steps.append(
                         {
                             "step": step_count,
@@ -88,6 +99,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                     )
             elif event.content and not event.partial:
                 step_count += 1
+                logger.debug("llm step run_id=%s step=%d", run_id, step_count)
                 steps.append(
                     {
                         "step": step_count,
@@ -102,6 +114,10 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 iteration_count += 1
 
             if iteration_count >= agent_row["max_iterations"]:
+                logger.warning(
+                    "max iterations exceeded run_id=%s task_id=%s limit=%d",
+                    run_id, task_id, agent_row["max_iterations"]
+                )
                 raise MaxIterationsExceeded(iteration_count)
 
         if final_text:
@@ -114,7 +130,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             )
 
         cost = openrouter_cost(
-            model=config.llm.default_model,
+            model=model,
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
         )
@@ -135,6 +151,11 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             },
         )
 
+        logger.info(
+            "run complete run_id=%s steps=%d input_tokens=%d output_tokens=%d cost=%.6f",
+            run_id, step_count, total_input_tokens, total_output_tokens, cost
+        )
+
         await handle_routing(
             db=db,
             task_id=task_id,
@@ -142,9 +163,11 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             agent_name=agent_name,
             agent_boss=agent_row["boss"],
             final_text=final_text or "",
+            run_id=run_id,
         )
 
     except MaxIterationsExceeded as e:
+        logger.warning("max iterations exceeded run_id=%s task_id=%s", run_id, task_id)
         await fail_run(
             db,
             run_id,
@@ -155,6 +178,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             f"Max iterations reached ({e.count})",
         )
     except asyncio.CancelledError:
+        logger.info("run preempted run_id=%s task_id=%s", run_id, task_id)
         await db.execute(
             """UPDATE runs
                SET status = 'preempted', ended_at = :now,
@@ -171,6 +195,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
         )
         raise
     except Exception as e:
+        logger.exception("run fatal error run_id=%s task_id=%s", run_id, task_id)
         await fail_run(
             db, run_id, task_id, steps, total_input_tokens, total_output_tokens, str(e)
         )
@@ -213,7 +238,7 @@ async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason):
             )
 
 
-async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_text):
+async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_text, run_id):
     now = utc_now()
 
     async with db.transaction():
@@ -237,6 +262,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
         tag = parse_first_tag(final_text)
 
         if tag == "user":
+            logger.info("routing run_id=%s -> user", run_id)
             await db.execute(
                 "UPDATE tasks SET status='open', assignee='user' WHERE id = :id",
                 {"id": task_id},
@@ -247,11 +273,13 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                 {"tag": tag, "org": org_name},
             )
             if agent:
+                logger.info("routing run_id=%s -> %s", run_id, tag)
                 await db.execute(
                     "UPDATE tasks SET status='open', assignee=:assignee, queued_at=:now WHERE id = :id",
                     {"assignee": tag, "now": now, "id": task_id},
                 )
             elif agent_boss:
+                logger.info("routing run_id=%s -> %s (boss escalation)", run_id, agent_boss)
                 await db.execute(
                     "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                     {
@@ -265,6 +293,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                     {"assignee": agent_boss, "now": now, "id": task_id},
                 )
             else:
+                logger.info("routing run_id=%s -> user (no tag, no boss)", run_id)
                 await db.execute(
                     "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                     {
@@ -278,6 +307,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                     {"id": task_id},
                 )
         elif agent_boss:
+            logger.info("routing run_id=%s -> %s (boss escalation)", run_id, agent_boss)
             await db.execute(
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
@@ -291,6 +321,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                 {"assignee": agent_boss, "now": now, "id": task_id},
             )
         else:
+            logger.info("routing run_id=%s -> user (no tag, no boss)", run_id)
             await db.execute(
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {

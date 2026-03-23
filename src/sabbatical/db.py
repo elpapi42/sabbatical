@@ -29,7 +29,7 @@ organizations = Table(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
 )
 
@@ -47,12 +47,13 @@ agents = Table(
     Column("boss", String, nullable=True),
     Column("instructions_path", String, nullable=False),
     Column("max_iterations", Integer, nullable=False),
+    Column("model", String, nullable=True),
     Column("is_removed", Integer, nullable=False, server_default="0"),
     Column(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
     ForeignKeyConstraint(
         ["organization_name", "boss"],
@@ -81,7 +82,7 @@ tasks = Table(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
     CheckConstraint("status IN ('open', 'in_progress', 'failed', 'done', 'canceled')"),
 )
@@ -117,7 +118,7 @@ comments = Table(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
 )
 
@@ -135,7 +136,7 @@ runs = Table(
         "started_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
     Column("ended_at", String, nullable=True),
     Column("model_used", String, nullable=True),
@@ -164,7 +165,7 @@ sessions = Table(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
 )
 
@@ -184,7 +185,7 @@ session_messages = Table(
         "created_at",
         String,
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"),
+        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
     ),
     CheckConstraint("role IN ('user', 'assistant')"),
 )

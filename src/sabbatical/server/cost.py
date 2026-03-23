@@ -22,9 +22,9 @@ async def sum_run_costs(db: databases.Database, **filters) -> dict:
     )
 
     return {
-        "consumed_input_tokens": row["input_tokens"],
-        "consumed_output_tokens": row["output_tokens"],
-        "total_cost": row["cost"],
+        "consumed_input_tokens": row["input_tokens"] if row else 0,
+        "consumed_output_tokens": row["output_tokens"] if row else 0,
+        "total_cost": row["cost"] if row else 0.0,
     }
 
 
@@ -41,12 +41,14 @@ async def organization_total_cost(db: databases.Database, org_name: str) -> dict
         values={"org_name": org_name},
     )
 
+    session_inputs = session_row["input_tokens"] if session_row else 0
+    session_outputs = session_row["output_tokens"] if session_row else 0
+    session_cost = session_row["cost"] if session_row else 0.0
+
     return {
-        "consumed_input_tokens": runs["consumed_input_tokens"]
-        + session_row["input_tokens"],
-        "consumed_output_tokens": runs["consumed_output_tokens"]
-        + session_row["output_tokens"],
-        "total_cost": runs["total_cost"] + session_row["cost"],
+        "consumed_input_tokens": runs["consumed_input_tokens"] + session_inputs,
+        "consumed_output_tokens": runs["consumed_output_tokens"] + session_outputs,
+        "total_cost": runs["total_cost"] + session_cost,
     }
 
 
@@ -61,12 +63,14 @@ async def system_total_cost(db: databases.Database) -> dict:
         """
     )
 
+    session_inputs = session_row["input_tokens"] if session_row else 0
+    session_outputs = session_row["output_tokens"] if session_row else 0
+    session_cost = session_row["cost"] if session_row else 0.0
+
     return {
-        "consumed_input_tokens": runs["consumed_input_tokens"]
-        + session_row["input_tokens"],
-        "consumed_output_tokens": runs["consumed_output_tokens"]
-        + session_row["output_tokens"],
-        "total_cost": runs["total_cost"] + session_row["cost"],
+        "consumed_input_tokens": runs["consumed_input_tokens"] + session_inputs,
+        "consumed_output_tokens": runs["consumed_output_tokens"] + session_outputs,
+        "total_cost": runs["total_cost"] + session_cost,
     }
 
 

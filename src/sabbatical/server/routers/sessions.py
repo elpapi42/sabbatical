@@ -1,10 +1,12 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.events import Event
 from google.genai import types
 from sse_starlette.sse import EventSourceResponse
 
@@ -13,6 +15,7 @@ from sabbatical.models import (
     MessageCreate,
     SessionCreate,
     SessionDetail,
+    SessionMessage,
     SessionSummary,
 )
 from sabbatical.server.dependencies import get_config, get_db
@@ -21,7 +24,7 @@ router = APIRouter(tags=["Sessions"])
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%fZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -57,7 +60,7 @@ async def create_session(session: SessionCreate, db=Depends(get_db)):
 
 
 @router.get("/sessions")
-async def list_sessions(organization_scope: str = None, db=Depends(get_db)):
+async def list_sessions(organization_scope: Optional[str] = None, db=Depends(get_db)):
     query = "SELECT * FROM sessions"
     values = {}
     if organization_scope:
@@ -91,13 +94,11 @@ async def get_session(id: str, db=Depends(get_db)):
         {"id": id},
     )
     messages = [
-        {
-            "role": m["role"],
-            "content": m["content"],
-            "created_at": datetime.fromisoformat(
-                m["created_at"].replace("Z", "+00:00")
-            ),
-        }
+        SessionMessage(
+            role=m["role"],
+            content=m["content"] or "",
+            created_at=datetime.fromisoformat(m["created_at"].replace("Z", "+00:00")),
+        )
         for m in msgs
     ]
 
@@ -117,10 +118,10 @@ async def get_session(id: str, db=Depends(get_db)):
 async def send_message(
     session_id: str, body: MessageCreate, db=Depends(get_db), config=Depends(get_config)
 ):
-    session = await db.fetch_one(
+    db_session = await db.fetch_one(
         "SELECT * FROM sessions WHERE id = :id", {"id": session_id}
     )
-    if not session:
+    if not db_session:
         return JSONResponse(
             status_code=404, content={"message": f"Session '{session_id}' not found."}
         )
@@ -131,19 +132,20 @@ async def send_message(
         {"sid": session_id, "content": body.content, "now": now},
     )
 
-    if not session["title"]:
+    if not db_session["title"]:
+        content_text = body.content if body.content else ""
         new_title = (
-            body.content[:47] + "..." if len(body.content) > 50 else body.content
+            (content_text[:47] + "...") if len(content_text) > 50 else content_text
         )
         await db.execute(
             "UPDATE sessions SET title = :title WHERE id = :id",
             {"title": new_title, "id": session_id},
         )
 
-    runner = create_assistant_agent(config, db, session["organization_scope"])
+    runner = create_assistant_agent(config, db, db_session["organization_scope"])
 
-    # Initialize the ADK session first
-    await runner.session_service.create_session(
+    # Initialize the ADK session and capture the returned session object
+    adk_session = await runner.session_service.create_session(
         app_name="sabbatical_assistant", user_id="sabbatical", session_id=session_id
     )
 
@@ -153,12 +155,15 @@ async def send_message(
     )
 
     for msg in prior_messages[:-1]:
-        await runner.session_service.append_event(
-            session_id=session_id,
-            event=types.Content(
-                role=msg["role"], parts=[types.Part.from_text(text=msg["content"])]
+        content_text = msg["content"] if msg["content"] else ""
+        event = Event(
+            author="sabbatical",
+            content=types.Content(
+                role=msg["role"],
+                parts=[types.Part.from_text(text=content_text)],
             ),
         )
+        await runner.session_service.append_event(session=adk_session, event=event)
 
     async def event_generator():
         full_text = ""
@@ -173,17 +178,19 @@ async def send_message(
             ),
             run_config=RunConfig(streaming_mode=StreamingMode.SSE),
         ):
-            if event.partial and event.content:
-                chunk = event.content.parts[0].text if event.content.parts else ""
-                yield {"event": "token", "data": json.dumps({"content": chunk})}
-                full_text += chunk
+            if event.partial and event.content and event.content.parts:
+                first_part = event.content.parts[0]
+                chunk = first_part.text if first_part and first_part.text else ""
+                if chunk:
+                    yield {"event": "token", "data": json.dumps({"content": chunk})}
+                    full_text += chunk
 
             if event.usage_metadata and not event.partial:
                 total_input += event.usage_metadata.prompt_token_count or 0
                 total_output += event.usage_metadata.candidates_token_count or 0
 
-            if not event.partial and event.content:
-                full_text = "".join(p.text for p in event.content.parts if p.text)
+            if not event.partial and event.content and event.content.parts:
+                full_text = "".join(p.text or "" for p in event.content.parts if p.text)
 
         end_now = utc_now()
         await db.execute(

@@ -25,7 +25,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('workspace_path', sa.String(), nullable=False),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.PrimaryKeyConstraint('name')
     )
     op.create_table('agents',
@@ -36,7 +36,7 @@ def upgrade() -> None:
     sa.Column('instructions_path', sa.String(), nullable=False),
     sa.Column('max_iterations', sa.Integer(), nullable=False),
     sa.Column('is_removed', sa.Integer(), server_default='0', nullable=False),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.ForeignKeyConstraint(['organization_name', 'boss'], ['agents.organization_name', 'agents.name'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['organization_name'], ['organizations.name'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('organization_name', 'name')
@@ -48,7 +48,7 @@ def upgrade() -> None:
     sa.Column('consumed_input_tokens', sa.Integer(), server_default='0', nullable=False),
     sa.Column('consumed_output_tokens', sa.Integer(), server_default='0', nullable=False),
     sa.Column('total_cost', sa.Float(), server_default='0.0', nullable=False),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.ForeignKeyConstraint(['organization_scope'], ['organizations.name'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -66,7 +66,7 @@ def upgrade() -> None:
     sa.Column('status', sa.String(), server_default='open', nullable=False),
     sa.Column('assignee', sa.String(), server_default='user', nullable=False),
     sa.Column('queued_at', sa.String(), nullable=True),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.CheckConstraint("status IN ('open', 'in_progress', 'failed', 'done', 'canceled')"),
     sa.ForeignKeyConstraint(['organization_name'], ['organizations.name'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
@@ -77,7 +77,7 @@ def upgrade() -> None:
     sa.Column('task_id', sa.String(), nullable=False),
     sa.Column('author', sa.String(), nullable=False),
     sa.Column('body', sa.Text(), nullable=False),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.ForeignKeyConstraint(['task_id'], ['tasks.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -87,7 +87,7 @@ def upgrade() -> None:
     sa.Column('agent_name', sa.String(), nullable=False),
     sa.Column('organization_name', sa.String(), nullable=False),
     sa.Column('status', sa.String(), server_default='running', nullable=False),
-    sa.Column('started_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('started_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.Column('ended_at', sa.String(), nullable=True),
     sa.Column('model_used', sa.String(), nullable=True),
     sa.Column('consumed_input_tokens', sa.Integer(), server_default='0', nullable=False),
@@ -103,7 +103,7 @@ def upgrade() -> None:
     sa.Column('session_id', sa.String(), nullable=False),
     sa.Column('role', sa.String(), nullable=False),
     sa.Column('content', sa.Text(), nullable=False),
-    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"), nullable=False),
+    sa.Column('created_at', sa.String(), server_default=sa.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"), nullable=False),
     sa.CheckConstraint("role IN ('user', 'assistant')"),
     sa.ForeignKeyConstraint(['session_id'], ['sessions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
