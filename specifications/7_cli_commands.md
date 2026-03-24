@@ -73,12 +73,13 @@ Add a new agent to an organization.
   * `--description "<text>"` — Optional. A brief one-liner describing the agent's role and expertise. Injected into the organization roster so peer agents know who to route work to.
   * `--instructions <path>` — Required. Path to a `.md` file containing the agent's system prompt (identity, persona, domain expertise).
   * `--max-iterations <number>` — Optional. The maximum number of LLM iterations (turns) the agent can perform per Run before the Dispatcher triggers a circuit breaker. Defaults to a system-wide value defined in configuration.
-* **Action:** Sends a request to the API Server to write the agent record, including its Boss relationship and max iterations setting.
+  * `--model <model_identifier>` — Optional. LLM model override for this agent (e.g., `anthropic/claude-sonnet-4-20250514`). If omitted, the system-wide default model from configuration is used.
+* **Action:** Sends a request to the API Server to write the agent record, including its Boss relationship, max iterations setting, and optional model override.
 * **Validation:** Errors if the agent name already exists in the organization, if the name is not valid `snake_case`, or if `--boss` references a non-existent agent.
 
 ### `agent list --organization <organization_name>`
 List all agents in an organization.
-* **Action:** Outputs a table of agents with their name, description, Boss, model, max iterations, and **cost ($)** (computed from Runs).
+* **Action:** Outputs a table of agents with their name, description, Boss, model (or `(default)` if using the system-wide model), max iterations, and **cost ($)** (computed from Runs).
 
 ### `agent view <name> --organization <organization_name>`
 Display an agent's full profile. Works on both active and removed agents (removed agents are still stored in the database for historical reference).
@@ -91,6 +92,7 @@ Modify an agent's profile.
   * `--description "<text>"` — Update the agent's description.
   * `--instructions <path>` — Replace the agent's instructions file path.
   * `--max-iterations <number>` — Update the agent's max iterations limit.
+  * `--model <model_identifier>` — Update the agent's LLM model override. Pass `--model none` to revert to the system-wide default.
 * **Validation:** Errors if the agent is currently the assignee of an `in_progress` task (the user must preempt first).
 
 ### `agent remove <name> --organization <organization_name>`
@@ -117,7 +119,7 @@ List tasks with optional filters.
   * `--organization <organization_name>` — Filter by organization.
   * `--status <open|in_progress|failed|done|canceled>` — Filter by status.
   * `--assignee <name|user>` — Filter by current assignee.
-* **Action:** Outputs a table of tasks with their id, title, status, assignee, created date, and **cost ($)** (computed from Runs). When no `--organization` filter is applied, an additional "Org" column is shown. For `in_progress` tasks, the table also shows the elapsed time of the current run. For `done` and `failed` tasks, the total duration across all runs is shown.
+* **Action:** Outputs a table of tasks with their id, title, status, assignee, created date, and **cost ($)** (computed from Runs). When no `--organization` filter is applied, an additional "Org" column is shown. For `in_progress` tasks, the elapsed time of the current run is appended to the cost column (e.g., `$0.04 (2m 30s)`). For `done`, `failed`, and `canceled` tasks, the total duration across all runs is appended similarly.
 
 ### `task view <id>`
 Display a task's full timeline (the "Task Tray").
@@ -167,7 +169,9 @@ Cancel a task.
 
 ### `run view <id>`
 Display the full execution details of a specific run.
-* **Action:** Outputs the run metadata (id, task_id, agent, organization, status, duration, model_used, consumed_input_tokens, consumed_output_tokens, total_cost) followed by the exhaustive, step-by-step breakdown of the execution. Each step shows the LLM reasoning, the specific tool invoked, the arguments passed, and the raw `stdout`/`stderr` returned from the local environment.
+* **Flags:**
+  * `--full` — Show full untruncated tool outputs. By default, tool call outputs longer than 500 characters are truncated for readability.
+* **Action:** Outputs the run metadata (id, task_id, agent, organization, status, duration, model_used, consumed_input_tokens, consumed_output_tokens, total_cost) followed by the step-by-step breakdown of the execution. Each step shows the LLM reasoning, the specific tool invoked, the arguments passed, and the `stdout`/`stderr` returned from the local environment. Tool outputs are truncated to 500 characters by default; use `--full` to display complete output.
 
 ### `run list --task <id>`
 List all runs associated with a specific task.
@@ -188,7 +192,7 @@ Start a new conversational session with The Assistant.
 List historical chat sessions.
 * **Flags:**
   * `--organization <organization_name>` — Optional. Filter sessions scoped to a specific organization.
-* **Action:** Outputs a table of chat sessions with their ID, auto-generated title, creation date, and total cost.
+* **Action:** Outputs a table of chat sessions with their ID, auto-generated title, organization scope (if any), cost, and creation date.
 
 ### `chat resume <session_id>`
 Resume a previous chat session.

@@ -44,7 +44,10 @@ def list_runs(task: str = typer.Option(..., "--task", help="Task ID")):
 
 
 @run_app.command("view")
-def view(id: str):
+def view(
+    id: str,
+    full: bool = typer.Option(False, "--full", help="Show full untruncated output"),
+):
     """Display full execution details of a specific run."""
     with get_client() as client:
         try:
@@ -69,9 +72,8 @@ def view(id: str):
                         f"Args: {json.dumps(step.get('arguments', {}), indent=2)}"
                     )
                     out = step.get("output") or ""
-                    # truncate very long outputs for display
-                    if len(out) > 500:
-                        out = out[:500] + "\n... [truncated]"
+                    if not full and len(out) > 500:
+                        out = out[:500] + "\n... [truncated, use --full to show all]"
                     typer.echo(f"Output: {out}")
                 elif step["type"] == "final_output":
                     typer.echo(step.get("content", ""))

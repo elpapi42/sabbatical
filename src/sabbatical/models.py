@@ -122,10 +122,15 @@ class TaskCreate(BaseModel):
     description: Optional[str] = None
 
 
+TaskStatus = Literal["open", "in_progress", "failed", "done", "canceled"]
+RunStatus = Literal["running", "success", "failed", "preempted"]
+StepType = Literal["llm_reasoning", "tool_call", "final_output"]
+
+
 class TaskSummary(BaseModel):
     id: str
     title: str
-    status: str
+    status: TaskStatus
     organization: str
     assignee: str
     consumed_input_tokens: int
@@ -147,7 +152,7 @@ class TimelineRunSummary(BaseModel):
     type: Literal["run_summary"] = "run_summary"
     run_id: str
     agent: str
-    status: str
+    status: RunStatus
     duration_seconds: Optional[float]
     cost: float
     started_at: datetime
@@ -159,7 +164,7 @@ class TaskDetail(BaseModel):
     organization: str
     title: str
     description: str
-    status: str
+    status: TaskStatus
     assignee: str
     consumed_input_tokens: int
     consumed_output_tokens: int
@@ -174,7 +179,7 @@ class CommentCreate(BaseModel):
 
 class TaskActionResult(BaseModel):
     id: str
-    status: str
+    status: TaskStatus
     assignee: str
     preempted_run: Optional[str] = None
 
@@ -192,7 +197,7 @@ class RunSummary(BaseModel):
     task_id: str
     agent: str
     organization: str
-    status: str
+    status: RunStatus
     duration_seconds: Optional[float]
     total_cost: float
     model_used: Optional[str] = None
@@ -202,7 +207,7 @@ class RunSummary(BaseModel):
 
 class ExecutionStep(BaseModel):
     step: int
-    type: str  # "llm_reasoning", "tool_call", "final_output"
+    type: StepType
     content: Optional[str] = None
     tool: Optional[str] = None
     arguments: Optional[dict] = None

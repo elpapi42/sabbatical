@@ -110,7 +110,11 @@ def status():
         typer.echo(
             f"Active Workers: {data['active_workers']} / {data['max_concurrency']}"
         )
-        typer.echo(f"Tasks: {data['tasks']}")
+        t = data["tasks"]
+        typer.echo(
+            f"Tasks: {t['open']} open, {t['in_progress']} in_progress, "
+            f"{t['failed']} failed, {t['done']} done, {t['canceled']} canceled"
+        )
         typer.echo(
             f"Tokens: In={data['consumed_input_tokens']} Out={data['consumed_output_tokens']}"
         )

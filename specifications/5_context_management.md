@@ -31,7 +31,7 @@ This tree-based formatting explicitly trains the stateless profile on its place 
 The agent's identity, presented as a character to inhabit rather than configuration to follow. Structured in two sections:
 
 * **Identity First (`## You Are: {name}`):** The agent's name followed immediately by the raw `.md` file referenced by the agent's `instructions_path`, containing the agent's core persona, domain expertise, and working style. Instructions come before any operational context so the agent reads who it is and steps into that role before seeing hierarchy or constraints.
-* **Place in the Organization:** Declaration of the agent's Boss (if any) and Direct Reports. The hierarchy is presented as informational — the Boss is the default escalation path, direct reports are natural delegates, but the agent may tag any agent in the roster. If Boss is null, the agent is a hierarchy root.
+* **Place in the Organization:** Declaration of the agent's Boss (if any) and Direct Reports, presented with `@` prefixes (e.g., `Your Boss: @lead`) to teach the agent the tagging syntax by example. The hierarchy is presented as informational — the Boss is the default escalation path, direct reports are natural delegates, but the agent may tag any agent in the roster. If Boss is null, the agent is a hierarchy root. *(Note: The `@` prefix in Block C is intentional — it reinforces the `@tag` routing convention that agents must use in their final output. This is distinct from the database-level convention where the `assignee` field stores the plain name without `@`.)*
 * **Iteration Budget:** The agent's `max_iterations` limit, placed at the end of the block as operational context rather than a configuration field.
 
 ---

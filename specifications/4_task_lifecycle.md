@@ -16,6 +16,14 @@ A task must strictly exist in one of the following five states:
 * **`done`** — Closed state. The task has been manually verified and closed by the human user. No further comments can be appended unless the task is reopened via `task reopen <id>`. Unlike `canceled`, this state is **reversible**.
 * **`canceled`** — Terminal state. The task has been explicitly canceled by the human user. No further comments can be appended.
 
+### The Run Status Enum
+A Run (an individual agent execution) must exist in one of the following four states:
+
+* **`running`** — The worker thread is actively executing the agent. Set when the Dispatcher creates the Run record.
+* **`success`** — The agent completed its execution normally (with or without a valid `@` tag).
+* **`failed`** — The agent execution crashed due to an unhandled exception, LLM API error, context window exceeded, or max iterations exceeded.
+* **`preempted`** — The Run was interrupted before completion, either by user preemption (`task preempt`), user cancellation (`task cancel`), or server shutdown (`server down`).
+
 ---
 
 ## 3. State Transitions & Triggers

@@ -222,6 +222,7 @@ Add a new agent to an organization.
 | `boss` | string | no | Name of another agent in the same organization. If omitted, agent is a hierarchy root. |
 | `instructions_path` | string | yes | Path to the `.md` file containing the agent's system prompt. |
 | `max_iterations` | integer | no | Per-run LLM turn iteration limit. Defaults to the system-wide value. |
+| `model` | string | no | LLM model override for this agent. If omitted, the system-wide default model is used. |
 
 **Response `201`**
 ```json
@@ -232,6 +233,7 @@ Add a new agent to an organization.
   "boss": "lead",
   "instructions_path": "/home/user/prompts/frontend_dev.md",
   "max_iterations": 50,
+  "model": null,
   "is_removed": false
 }
 ```
@@ -264,6 +266,7 @@ List all agents in an organization.
       "boss": "lead",
       "instructions_path": "/home/user/prompts/frontend_dev.md",
       "max_iterations": 50,
+      "model": null,
       "is_removed": false,
       "consumed_input_tokens": 22100,
       "consumed_output_tokens": 5800,
@@ -290,6 +293,7 @@ Get an agent's full profile. Works on both active and removed agents.
   "instructions_path": "/home/user/prompts/frontend_dev.md",
   "instructions_content": "Full contents of the .md system prompt file...",
   "max_iterations": 50,
+  "model": null,
   "is_removed": false,
   "subordinates": [
     {
@@ -322,6 +326,7 @@ Update an agent's profile.
 | `boss` | string \| null | Reassign boss. Pass `null` to promote to root. |
 | `instructions_path` | string | Replace the instructions file path. |
 | `max_iterations` | integer | Update the iteration limit. |
+| `model` | string \| null | Update the agent's LLM model override. Pass `null` to revert to the system-wide default. |
 
 **Response `200`** — Returns the full updated agent object (same shape as `GET`).
 
