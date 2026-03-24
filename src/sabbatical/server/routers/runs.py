@@ -39,6 +39,7 @@ async def list_runs(task_id: str, db=Depends(get_db)):
                 status=r["status"],
                 duration_seconds=dur,
                 total_cost=r["total_cost"],
+                model_used=r["model_used"],
                 started_at=datetime.fromisoformat(
                     r["started_at"].replace("Z", "+00:00")
                 ),

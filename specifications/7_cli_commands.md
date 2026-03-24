@@ -15,6 +15,13 @@ Start the Sabbatical API Server.
 Gracefully stop the API Server.
 * **Action:** Sends a shutdown signal to the running API Server. All active worker threads are allowed to finish their current LLM generation before being terminated. In-progress tasks are returned to `status='open'` with their current assignee and `queued_at` preserved (active Runs are marked as `preempted`), so they are automatically picked up when the Dispatcher resumes polling on the next `server up`. The API Server process then exits. If the HTTP request fails but the PID file exists, it falls back to killing the process via `SIGTERM` (and then `SIGKILL` if necessary).
 
+### `server logs`
+Tail the server log file.
+* **Flags:**
+  * `--follow / --no-follow` (`-f`) — Follow log output in real time (default: follow).
+  * `--lines <number>` (`-n`) — Number of lines to show (default: 50).
+* **Action:** Outputs the last N lines of `~/.sabbatical/server.log`. With `--follow`, streams new lines as they are written (like `tail -f`). Press `Ctrl+C` to stop.
+
 ### `server status`
 Print a snapshot of the system.
 * **Action:** Queries the API Server and outputs whether it is running, the count of tasks by status (`open`, `in_progress`, `failed`, `done`, `canceled`), the number of active worker threads, and the **total lifetime cost** incurred across all organizations and system-level Assistant chats.
@@ -36,8 +43,8 @@ List all organizations.
 * **Action:** Outputs a table of all organizations with their name, description, workspace path, agent count, and **cost ($)** (computed from Runs).
 
 ### `organization view <name>`
-Display an organization's hierarchy tree.
-* **Action:** Outputs a visual tree (directory-style indentation) of all agents in the organization, reflecting Boss/subordinate relationships. Root agents appear at the top level; subordinates are nested beneath their Boss.
+Display an organization's details and hierarchy tree.
+* **Action:** Outputs the organization's name, description, workspace path, cost, and a visual tree (directory-style indentation) of all agents in the organization, reflecting Boss/subordinate relationships. Root agents appear at the top level; subordinates are nested beneath their Boss.
 
 ### `organization edit <name>`
 Modify an organization's metadata.
@@ -71,7 +78,7 @@ Add a new agent to an organization.
 
 ### `agent list --organization <organization_name>`
 List all agents in an organization.
-* **Action:** Outputs a table of agents with their name, Boss, max iterations, and **cost ($)** (computed from Runs).
+* **Action:** Outputs a table of agents with their name, description, Boss, model, max iterations, and **cost ($)** (computed from Runs).
 
 ### `agent view <name> --organization <organization_name>`
 Display an agent's full profile. Works on both active and removed agents (removed agents are still stored in the database for historical reference).
@@ -102,7 +109,7 @@ Create a new task.
   * `--assign <agent_name|user>` — Optional. Initial assignee. Defaults to `user`.
   * `--description "<text>"` or `--description-file <path>` — Optional. Sets the task description (the detailed spec). If omitted, the description defaults to the title.
 * **Action:** Sends a request to the API Server to write the task with `status='open'`. If the assignee is an agent, `queued_at` is set to `now()`, making the task visible to the Dispatcher's polling loop.
-* **Output:** Prints the new task's `id` and assignment status. Examples: `Created REAC-0012 (assigned to frontend_dev, queued for dispatch)` or `Created REAC-0012 (assigned to user)`.
+* **Output:** Prints the new task's `id` and assignment status. Examples: `Created REAC-0012 (assigned to frontend_dev, queued for dispatch)` or `Created REAC-0012 (assigned to user)`. When the assignee is `user`, only the assignment is shown — no dispatch info.
 
 ### `task list`
 List tasks with optional filters.
@@ -110,7 +117,7 @@ List tasks with optional filters.
   * `--organization <organization_name>` — Filter by organization.
   * `--status <open|in_progress|failed|done|canceled>` — Filter by status.
   * `--assignee <name|user>` — Filter by current assignee.
-* **Action:** Outputs a table of tasks with their id, title, status, organization, assignee, and **cost ($)** (computed from Runs). For `in_progress` tasks, the table also shows the elapsed time of the current run.
+* **Action:** Outputs a table of tasks with their id, title, status, assignee, created date, and **cost ($)** (computed from Runs). When no `--organization` filter is applied, an additional "Org" column is shown. For `in_progress` tasks, the table also shows the elapsed time of the current run. For `done` and `failed` tasks, the total duration across all runs is shown.
 
 ### `task view <id>`
 Display a task's full timeline (the "Task Tray").
@@ -137,9 +144,17 @@ Mark a task as completed.
 * **Action:** Sets `status='done'`. The thread is locked — no further comments can be appended unless the task is reopened.
 
 ### `task reopen <id>`
-Reopen a completed task.
-* **Prerequisite:** Task must be `status='done'`.
-* **Action:** The API Server appends `[SYSTEM: Task reopened by user]`, sets `status='open'`, `assignee='user'`. The thread is unlocked and the user can comment, delegate, or close the task again.
+Reopen a completed or failed task.
+* **Prerequisite:** Task must be `status='done'` or `status='failed'`.
+* **Action:** The API Server appends `[SYSTEM: Task reopened by user]`, sets `status='open'`, `assignee='user'`. The thread is unlocked and the user can comment, delegate, or close the task again. Reopening a `failed` task is the simplest recovery path — the user can then comment with an `@agent_name` tag to re-dispatch.
+
+### `task retry <id>`
+Retry a failed or done task by reopening and assigning to an agent in one step.
+* **Flags:**
+  * `--assign <agent_name>` — Optional. The agent to assign the retry to. If omitted, defaults to the last agent that worked on the task (based on the most recent Run).
+* **Prerequisite:** Task must be `status='done'` or `status='failed'`.
+* **Action:** The API Server atomically reopens the task, sets `assignee` to the target agent, sets `queued_at` to `now()`, and appends `[SYSTEM: Task retried — assigned to {agent}]`. The task becomes visible to the Dispatcher's next poll cycle.
+* **Note:** This is a convenience shortcut equivalent to `task reopen <id>` followed by `task comment <id> "@agent_name retry"`.
 
 ### `task cancel <id>`
 Cancel a task.
@@ -156,7 +171,7 @@ Display the full execution details of a specific run.
 
 ### `run list --task <id>`
 List all runs associated with a specific task.
-* **Action:** Outputs a table of runs with their run ID, executing agent, status (`success`, `failed`, `preempted`), duration, and cost.
+* **Action:** Outputs a table of runs with their run ID, executing agent, model, status (`success`, `failed`, `preempted`), duration, and cost.
 
 ---
 

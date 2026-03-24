@@ -48,9 +48,11 @@ When the API Server spins up an isolated worker thread for an agent, it first pe
 Concurrent agents in the same organization may read and write the same files simultaneously. The system does not enforce file-level locking or conflict detection — last write wins. This is an accepted simplification for the first release.
 
 ### Agent Tooling
-All agents share a static, hardcoded tool set (the exact tools will be defined during implementation). Tools are not configurable per agent. Expected capabilities include:
-* **File System Access:** Read/write access scoped to the Organization's `workspace_path`.
-* **Terminal Access:** Ability to execute CLI commands, run scripts, and parse terminal `stdout`/`stderr`.
+All agents share a static, hardcoded tool set. Tools are not configurable per agent. The tool set consists of:
+* **`file_read`** — Read files with multiple modes: view, lines, search (grep), and find. Scoped to the Organization's `workspace_path`.
+* **`file_write`** — Write content to files with automatic parent directory creation. Scoped to the Organization's `workspace_path`.
+* **`editor`** — Make targeted edits (str_replace, insert, undo_edit) without rewriting entire files.
+* **`shell`** — Execute shell commands with the working directory set to the Organization's `workspace_path`.
 
 ## 4. Client-Server Communication Protocol
 
@@ -72,4 +74,4 @@ Global configuration is stored in the **`~/.sabbatical/`** directory. This inclu
 * **Server Settings:** Port, database path, polling interval, and other runtime parameters.
 
 ## 7. State Store
-All state lives in a centralized, global local database (e.g., a single SQLite file) managed exclusively by the API Server. The database doubles as the task queue — the Dispatcher polls it directly rather than maintaining a separate in-memory queue.
+All state lives in a centralized, global local database (a single SQLite file) managed exclusively by the API Server. The database doubles as the task queue — the Dispatcher polls it directly rather than maintaining a separate in-memory queue. The database is configured with `PRAGMA journal_mode=WAL` (Write-Ahead Logging) to support concurrent reads and writes — this is critical because worker threads write execution results while the API Server may simultaneously process user requests (e.g., preemption, status queries).

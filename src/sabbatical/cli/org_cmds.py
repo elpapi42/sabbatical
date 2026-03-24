@@ -72,6 +72,7 @@ def view(name: str):
             resp.raise_for_status()
             data = resp.json()
             typer.echo(f"Organization: {data['name']}")
+            typer.echo(f"Description: {data.get('description') or '(none)'}")
             typer.echo(f"Workspace: {data['workspace_path']}")
             typer.echo(f"Cost: ${data['total_cost']:.2f}")
             typer.echo("Hierarchy:")

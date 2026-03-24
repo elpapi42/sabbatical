@@ -36,10 +36,10 @@ async def add_agent(
             )
 
         existing = await db.fetch_one(
-            "SELECT name FROM agents WHERE name = :name AND organization_name = :org",
+            "SELECT name, is_removed FROM agents WHERE name = :name AND organization_name = :org",
             {"name": agent.name, "org": organization},
         )
-        if existing:
+        if existing and not existing["is_removed"]:
             return JSONResponse(
                 status_code=409,
                 content={
@@ -66,19 +66,36 @@ async def add_agent(
             else config.dispatcher.default_max_iterations
         )
 
-        await db.execute(
-            """INSERT INTO agents (name, organization_name, description, boss, instructions_path, max_iterations, model)
-               VALUES (:name, :org, :description, :boss, :path, :max_iter, :model)""",
-            {
-                "name": agent.name,
-                "org": organization,
-                "description": agent.description,
-                "boss": agent.boss,
-                "path": agent.instructions_path,
-                "max_iter": max_iter,
-                "model": agent.model,
-            },
-        )
+        if existing and existing["is_removed"]:
+            await db.execute(
+                """UPDATE agents SET description = :description, boss = :boss,
+                   instructions_path = :path, max_iterations = :max_iter, model = :model,
+                   is_removed = 0
+                   WHERE name = :name AND organization_name = :org""",
+                {
+                    "name": agent.name,
+                    "org": organization,
+                    "description": agent.description,
+                    "boss": agent.boss,
+                    "path": agent.instructions_path,
+                    "max_iter": max_iter,
+                    "model": agent.model,
+                },
+            )
+        else:
+            await db.execute(
+                """INSERT INTO agents (name, organization_name, description, boss, instructions_path, max_iterations, model)
+                   VALUES (:name, :org, :description, :boss, :path, :max_iter, :model)""",
+                {
+                    "name": agent.name,
+                    "org": organization,
+                    "description": agent.description,
+                    "boss": agent.boss,
+                    "path": agent.instructions_path,
+                    "max_iter": max_iter,
+                    "model": agent.model,
+                },
+            )
 
     return {
         "name": agent.name,

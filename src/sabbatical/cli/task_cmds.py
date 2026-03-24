@@ -3,7 +3,13 @@ from typing import Optional
 import httpx
 import typer
 
-from sabbatical.cli.formatters import print_json_error, print_table, print_task_tray
+from sabbatical.cli.formatters import (
+    format_duration,
+    format_relative_time,
+    print_json_error,
+    print_table,
+    print_task_tray,
+)
 from sabbatical.config import load_config
 
 task_app = typer.Typer(help="Task management commands")
@@ -44,10 +50,10 @@ def create(
             resp = client.post("/tasks", json=payload)
             resp.raise_for_status()
             data = resp.json()
-            queued_msg = (
-                "queued for dispatch" if assign != "user" else "assigned to user"
-            )
-            typer.echo(f"Created {data['id']} (assigned to {assign}, {queued_msg})")
+            if assign != "user":
+                typer.echo(f"Created {data['id']} (assigned to {assign}, queued for dispatch)")
+            else:
+                typer.echo(f"Created {data['id']} (assigned to user)")
         except httpx.HTTPStatusError as e:
             print_json_error(e.response)
 
@@ -75,7 +81,11 @@ def list_tasks(
             resp = client.get("/tasks", params=params)
             resp.raise_for_status()
             data = resp.json()["tasks"]
-            headers = ["ID", "Title", "Status", "Assignee", "Cost ($)"]
+            show_org = not organization
+            if show_org:
+                headers = ["ID", "Org", "Title", "Status", "Assignee", "Created", "Cost ($)"]
+            else:
+                headers = ["ID", "Title", "Status", "Assignee", "Created", "Cost ($)"]
             rows = []
             for t in data:
                 cost_str = f"${t['total_cost']:.2f}"
@@ -83,8 +93,17 @@ def list_tasks(
                     t["status"] == "in_progress"
                     and t.get("current_run_elapsed_seconds") is not None
                 ):
-                    cost_str += f" ({int(t['current_run_elapsed_seconds'])}s elapsed)"
-                rows.append([t["id"], t["title"], t["status"], t["assignee"], cost_str])
+                    cost_str += f" ({format_duration(t['current_run_elapsed_seconds'])})"
+                elif (
+                    t["status"] in ("done", "failed", "canceled")
+                    and t.get("total_duration_seconds") is not None
+                ):
+                    cost_str += f" ({format_duration(t['total_duration_seconds'])})"
+                created = format_relative_time(t.get("created_at", ""))
+                if show_org:
+                    rows.append([t["id"], t.get("organization", ""), t["title"], t["status"], t["assignee"], created, cost_str])
+                else:
+                    rows.append([t["id"], t["title"], t["status"], t["assignee"], created, cost_str])
             print_table(headers, rows)
         except httpx.HTTPStatusError as e:
             print_json_error(e.response)
@@ -153,6 +172,27 @@ def reopen(id: str):
             resp = client.post(f"/tasks/{id}/reopen")
             resp.raise_for_status()
             typer.echo(f"Task {id} reopened.")
+        except httpx.HTTPStatusError as e:
+            print_json_error(e.response)
+
+
+@task_app.command("retry")
+def retry(
+    id: str,
+    assign: Optional[str] = typer.Option(
+        None, "--assign", help="Agent to assign (defaults to last agent)"
+    ),
+):
+    """Retry a failed or done task by reopening and assigning to an agent."""
+    with get_client() as client:
+        try:
+            params = {}
+            if assign:
+                params["assignee"] = assign
+            resp = client.post(f"/tasks/{id}/retry", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            typer.echo(f"Task {id} retried (assigned to {data['assignee']}, queued for dispatch)")
         except httpx.HTTPStatusError as e:
             print_json_error(e.response)
 

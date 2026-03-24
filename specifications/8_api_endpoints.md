@@ -571,7 +571,7 @@ Mark a task as completed.
 ---
 
 ### `POST /api/tasks/:id/reopen`
-Reopen a completed task.
+Reopen a completed or failed task.
 
 **Request Body** — None.
 
@@ -592,7 +592,42 @@ Reopen a completed task.
 | Status | Condition |
 |---|---|
 | 404 | Task does not exist. |
-| 409 | Task is not `done`. |
+| 409 | Task is not `done` or `failed`. |
+
+---
+
+### `POST /api/tasks/:id/retry`
+Retry a failed or done task by reopening and assigning to an agent in one atomic operation.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|---|---|---|
+| `assignee` | string (optional) | Agent name to assign. Defaults to the last agent that ran on this task. |
+
+**Request Body** — None.
+
+**Behavior:**
+- Validates the task is `done` or `failed`.
+- Resolves the target agent (from `assignee` param or last Run's agent).
+- Validates the target agent exists in the organization.
+- Atomically sets `status='open'`, `assignee` to the target agent, `queued_at` to `now()`.
+- Appends `[SYSTEM: Task retried — assigned to {agent}]` comment.
+
+**Response `200`**
+```json
+{
+  "id": "REAC-0003",
+  "status": "open",
+  "assignee": "backend_dev"
+}
+```
+
+**Errors**
+| Status | Condition |
+|---|---|
+| 400 | No agent specified and no previous run found. |
+| 404 | Task or agent does not exist. |
+| 409 | Task is not `done` or `failed`. |
 
 ---
 
@@ -853,6 +888,7 @@ The `done` event includes the complete assistant message and cost data for this 
 | `POST` | `/api/tasks/:id/preempt` | `task preempt` |
 | `POST` | `/api/tasks/:id/done` | `task done` |
 | `POST` | `/api/tasks/:id/reopen` | `task reopen` |
+| `POST` | `/api/tasks/:id/retry` | `task retry` |
 | `POST` | `/api/tasks/:id/cancel` | `task cancel` |
 | `GET` | `/api/tasks/:task_id/runs` | `run list` |
 | `GET` | `/api/runs/:id` | `run view` |

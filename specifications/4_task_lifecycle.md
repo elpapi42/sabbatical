@@ -68,9 +68,14 @@ A task must strictly exist in one of the following five states:
   * *Action:* The API Server sets the status to `done` and locks the thread.
 
 ### F2. Reopening
-* **`done` → `open` (assigned to `user`)**
-  * *Trigger:* The human user executes `task reopen <id>` on a completed task.
-  * *Action:* The API Server appends `[SYSTEM: Task reopened by user]`, sets `status='open'`, `assignee='user'`. The thread is unlocked and accepts comments again. `queued_at` is not updated (task is assigned to user).
+* **`done` OR `failed` → `open` (assigned to `user`)**
+  * *Trigger:* The human user executes `task reopen <id>` on a completed or failed task.
+  * *Action:* The API Server appends `[SYSTEM: Task reopened by user]`, sets `status='open'`, `assignee='user'`. The thread is unlocked and accepts comments again. `queued_at` is not updated (task is assigned to user). Reopening a `failed` task is the simplest recovery path — the user can then comment with an `@agent_name` tag to re-dispatch.
+
+### F3. Retry (Convenience Shortcut)
+* **`done` OR `failed` → `open` (assigned to Agent)**
+  * *Trigger:* The human user executes `task retry <id>` optionally with `--assign <agent_name>`.
+  * *Action:* Atomically reopens the task and assigns it to the target agent. If no agent is specified, defaults to the last agent that worked on the task (based on the most recent Run). The API Server appends `[SYSTEM: Task retried — assigned to {agent}]`, sets `status='open'`, `assignee` to the target agent, and `queued_at` to `now()`. This is a convenience shortcut equivalent to `task reopen <id>` followed by `task comment <id> "@agent retry"`.
 
 ### G. Cancellation
 * **`open` → `canceled`**
@@ -171,7 +176,7 @@ Hierarchy powers graceful degradation when an agent fails to route a task proper
 2. **Mandatory Assignment:** The `assignee` field must always contain a valid agent name or `user`. It can never be null. The `@` prefix is a comment-level parsing convention only; the DB stores plain names.
 3. **Human Authority on Completion:** The `done` state can only be triggered by manual human intervention via the CLI.
 4. **Human Authority on Cancellation:** The `canceled` state can only be triggered by manual human intervention via the CLI.
-5. **Human Authority on Reopening:** Only the human user can reopen a `done` task via `task reopen <id>`.
+5. **Human Authority on Reopening:** Only the human user can reopen a `done` or `failed` task via `task reopen <id>`.
 6. **Human Override:** The user can preempt any `in_progress` task via `task preempt <id>`, returning it to `open` assigned to `user`.
 7. **Dispatcher Blind Spots:** The Dispatcher strictly ignores tasks where `assignee` is `user`.
 8. **Final Output Parsing Only:** The Dispatcher parses `@` tags exclusively from the agent's **final output message** (the last message after all tool use completes). Tags in intermediate reasoning, tool calls, or tool outputs are never parsed. The `@` prefix is stripped before storing in the `assignee` field.
@@ -179,7 +184,7 @@ Hierarchy powers graceful degradation when an agent fails to route a task proper
 10. **Organization-Scoped Routing:** Agent `@` tags are validated against the task's organization roster. Only agents belonging to the same organization as the task can be tagged. Organizations are fully isolated — no cross-organization handoffs.
 11. **Self-Tagging Allowed:** An agent may tag itself. The system permits this but does not promote it.
 12. **Canceled State Immutability:** Tasks in `canceled` status are permanently locked. No further comments, state changes, or reassignments are permitted.
-13. **Done State Reversibility:** Tasks in `done` status are locked but can be reopened by the user, returning them to `open` with `assignee='user'`.
+13. **Done/Failed State Reversibility:** Tasks in `done` or `failed` status can be reopened by the user via `task reopen <id>`, returning them to `open` with `assignee='user'`.
 14. **FIFO Dispatch Order:** The Dispatcher processes dispatchable tasks ordered by `queued_at` ASC (strict FIFO).
 15. **Max Concurrency:** The Dispatcher enforces a configurable limit on simultaneous worker threads. Excess tasks remain queued in the database.
 16. **No Retries:** Any LLM or system failure immediately transitions the task to `failed`. The system never retries automatically.

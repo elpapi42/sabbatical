@@ -203,8 +203,29 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
         )
 
 
+def _sanitize_error(reason: str) -> str:
+    """Produce a user-friendly error summary for the comment thread."""
+    lower = reason.lower()
+    if "max iterations" in lower:
+        return reason  # already user-friendly
+    if "context window" in lower or "token" in lower:
+        return "Context window exceeded — the task history is too long for the model."
+    if "rate limit" in lower or "429" in reason:
+        return "LLM rate limit reached — try again in a few minutes."
+    if "timeout" in lower:
+        return "Request timed out while communicating with the LLM provider."
+    if "connection" in lower or "network" in lower:
+        return "Network error while communicating with the LLM provider."
+    # Generic: show just the exception type and first line
+    first_line = reason.split("\n")[0]
+    if len(first_line) > 120:
+        first_line = first_line[:120] + "..."
+    return f"Agent execution failed — check `run view` for details. ({first_line})"
+
+
 async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason):
     now = utc_now()
+    # Full error goes into execution steps (visible via `run view`)
     steps.append({"step": len(steps) + 1, "type": "fatal_error", "content": reason})
     await db.execute(
         """UPDATE runs
@@ -221,6 +242,8 @@ async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason):
         },
     )
 
+    # User-friendly summary goes into the comment thread
+    friendly = _sanitize_error(reason)
     async with db.transaction():
         task = await db.fetch_one(
             "SELECT status FROM tasks WHERE id = :id", {"id": task_id}
@@ -230,7 +253,7 @@ async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason):
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": f"[SYSTEM: FATAL ERROR - {reason}]",
+                    "body": f"[SYSTEM: FATAL ERROR - {friendly}]",
                     "now": now,
                 },
             )

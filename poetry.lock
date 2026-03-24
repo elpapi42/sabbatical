@@ -305,21 +305,6 @@ files = [
 cryptography = "*"
 
 [[package]]
-name = "aws-requests-auth"
-version = "0.4.3"
-description = "AWS signature version 4 signing process for the python requests module"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "aws-requests-auth-0.4.3.tar.gz", hash = "sha256:33593372018b960a31dbbe236f89421678b885c35f0b6a7abfae35bb77e069b2"},
-    {file = "aws_requests_auth-0.4.3-py2.py3-none-any.whl", hash = "sha256:646bc37d62140ea1c709d20148f5d43197e6bd2d63909eb36fa4bb2345759977"},
-]
-
-[package.dependencies]
-requests = ">=0.14.0"
-
-[[package]]
 name = "banks"
 version = "2.4.1"
 description = "A prompt programming language"
@@ -364,46 +349,6 @@ chardet = ["chardet"]
 charset-normalizer = ["charset-normalizer"]
 html5lib = ["html5lib"]
 lxml = ["lxml"]
-
-[[package]]
-name = "boto3"
-version = "1.42.74"
-description = "The AWS SDK for Python"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "boto3-1.42.74-py3-none-any.whl", hash = "sha256:4bf89c044d618fe4435af854ab820f09dd43569c0df15d7beb0398f50b9aa970"},
-    {file = "boto3-1.42.74.tar.gz", hash = "sha256:dbacd808cf2a3dadbf35f3dbd8de97b94dc9f78b1ebd439f38f552e0f9753577"},
-]
-
-[package.dependencies]
-botocore = ">=1.42.74,<1.43.0"
-jmespath = ">=0.7.1,<2.0.0"
-s3transfer = ">=0.16.0,<0.17.0"
-
-[package.extras]
-crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
-
-[[package]]
-name = "botocore"
-version = "1.42.74"
-description = "Low-level, data-driven core of boto 3."
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "botocore-1.42.74-py3-none-any.whl", hash = "sha256:3a76a8af08b5de82e51a0ae132394e226e15dbf21c8146ac3f7c1f881517a7a7"},
-    {file = "botocore-1.42.74.tar.gz", hash = "sha256:9cf5cdffc6c90ed87b0fe184676806182588be0d0df9b363e9fe3e2923ac8e80"},
-]
-
-[package.dependencies]
-jmespath = ">=0.7.1,<2.0.0"
-python-dateutil = ">=2.1,<3.0.0"
-urllib3 = {version = ">=1.25.4,<2.2.0 || >2.2.0,<3", markers = "python_version >= \"3.10\""}
-
-[package.extras]
-crt = ["awscrt (==0.31.2)"]
 
 [[package]]
 name = "certifi"
@@ -836,22 +781,6 @@ wrapt = ">=1.10,<3"
 
 [package.extras]
 dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "setuptools ; python_version >= \"3.12\"", "tox"]
-
-[[package]]
-name = "dill"
-version = "0.4.1"
-description = "serialize all of Python"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "dill-0.4.1-py3-none-any.whl", hash = "sha256:1e1ce33e978ae97fcfcff5638477032b801c46c7c65cf717f95fbc2248f79a9d"},
-    {file = "dill-0.4.1.tar.gz", hash = "sha256:423092df4182177d4d8ba8290c8a5b640c66ab35ec7da59ccfa00f6fa3eea5fa"},
-]
-
-[package.extras]
-graph = ["objgraph (>=1.7.2)"]
-profile = ["gprof2dot (>=2022.7.29)"]
 
 [[package]]
 name = "dirtyjson"
@@ -2739,18 +2668,6 @@ files = [
 ]
 
 [[package]]
-name = "jmespath"
-version = "1.1.0"
-description = "JSON Matching Expressions"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64"},
-    {file = "jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d"},
-]
-
-[[package]]
 name = "joblib"
 version = "1.5.3"
 description = "Lightweight pipelining with Python functions"
@@ -3352,22 +3269,6 @@ rtd = ["ipykernel", "jupyter_sphinx", "mdit-py-plugins (>=0.5.0)", "myst-parser"
 testing = ["coverage", "pytest", "pytest-cov", "pytest-regressions", "requests"]
 
 [[package]]
-name = "markdownify"
-version = "1.2.2"
-description = "Convert HTML to markdown."
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "markdownify-1.2.2-py3-none-any.whl", hash = "sha256:3f02d3cc52714084d6e589f70397b6fc9f2f3a8531481bf35e8cc39f975e186a"},
-    {file = "markdownify-1.2.2.tar.gz", hash = "sha256:b274f1b5943180b031b699b199cbaeb1e2ac938b75851849a31fd0c3d6603d09"},
-]
-
-[package.dependencies]
-beautifulsoup4 = ">=4.9,<5"
-six = ">=1.15,<2"
-
-[[package]]
 name = "markupsafe"
 version = "3.0.3"
 description = "Safely add untrusted strings to HTML/XML markup."
@@ -3655,24 +3556,6 @@ lint = ["actionlint-py (==1.7.11.24)", "clang-format (==22.1.0)", "codespell (==
 plot = ["matplotlib (==3.10.8)", "pandas (==3.0.1)"]
 test = ["pytest (==9.0.2)", "pytest-sugar (==1.1.1)"]
 type = ["mypy (==1.19.1)"]
-
-[[package]]
-name = "mpmath"
-version = "1.3.0"
-description = "Python library for arbitrary-precision floating-point arithmetic"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
-    {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
-]
-
-[package.extras]
-develop = ["codecov", "pycodestyle", "pytest (>=4.6)", "pytest-cov", "wheel"]
-docs = ["sphinx"]
-gmpy = ["gmpy2 (>=2.1.0a4) ; platform_python_implementation != \"PyPy\""]
-tests = ["pytest (>=4.6)"]
 
 [[package]]
 name = "multidict"
@@ -4160,41 +4043,6 @@ opentelemetry-proto = "1.38.0"
 opentelemetry-sdk = ">=1.38.0,<1.39.0"
 requests = ">=2.7,<3.0"
 typing-extensions = ">=4.5.0"
-
-[[package]]
-name = "opentelemetry-instrumentation"
-version = "0.59b0"
-description = "Instrumentation Tools & Auto Instrumentation for OpenTelemetry Python"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "opentelemetry_instrumentation-0.59b0-py3-none-any.whl", hash = "sha256:44082cc8fe56b0186e87ee8f7c17c327c4c2ce93bdbe86496e600985d74368ee"},
-    {file = "opentelemetry_instrumentation-0.59b0.tar.gz", hash = "sha256:6010f0faaacdaf7c4dff8aac84e226d23437b331dcda7e70367f6d73a7db1adc"},
-]
-
-[package.dependencies]
-opentelemetry-api = ">=1.4,<2.0"
-opentelemetry-semantic-conventions = "0.59b0"
-packaging = ">=18.0"
-wrapt = ">=1.0.0,<2.0.0"
-
-[[package]]
-name = "opentelemetry-instrumentation-threading"
-version = "0.59b0"
-description = "Thread context propagation support for OpenTelemetry"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "opentelemetry_instrumentation_threading-0.59b0-py3-none-any.whl", hash = "sha256:76da2fc01fe1dccebff6581080cff9e42ac7b27cc61eb563f3c4435c727e8eca"},
-    {file = "opentelemetry_instrumentation_threading-0.59b0.tar.gz", hash = "sha256:ce5658730b697dcbc0e0d6d13643a69fd8aeb1b32fa8db3bade8ce114c7975f3"},
-]
-
-[package.dependencies]
-opentelemetry-api = ">=1.12,<2.0"
-opentelemetry-instrumentation = "0.59b0"
-wrapt = ">=1.0.0,<2.0.0"
 
 [[package]]
 name = "opentelemetry-proto"
@@ -5712,24 +5560,6 @@ files = [
 ]
 
 [[package]]
-name = "s3transfer"
-version = "0.16.0"
-description = "An Amazon S3 Transfer Manager"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe"},
-    {file = "s3transfer-0.16.0.tar.gz", hash = "sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920"},
-]
-
-[package.dependencies]
-botocore = ">=1.37.4,<2.0a0"
-
-[package.extras]
-crt = ["botocore[crt] (>=1.37.4,<2.0a0)"]
-
-[[package]]
 name = "setuptools"
 version = "82.0.1"
 description = "Most extensible Python build backend with support for C/C++ extension modules"
@@ -5773,36 +5603,6 @@ files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
 ]
-
-[[package]]
-name = "slack-bolt"
-version = "1.27.0"
-description = "The Bolt Framework for Python"
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "slack_bolt-1.27.0-py2.py3-none-any.whl", hash = "sha256:c43c94bf34740f2adeb9b55566c83f1e73fed6ba2878bd346cdfd6fd8ad22360"},
-    {file = "slack_bolt-1.27.0.tar.gz", hash = "sha256:3db91d64e277e176a565c574ae82748aa8554f19e41a4fceadca4d65374ce1e0"},
-]
-
-[package.dependencies]
-slack_sdk = ">=3.38.0,<4"
-
-[[package]]
-name = "slack-sdk"
-version = "3.41.0"
-description = "The Slack API Platform SDK for Python"
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "slack_sdk-3.41.0-py2.py3-none-any.whl", hash = "sha256:bb18dcdfff1413ec448e759cf807ec3324090993d8ab9111c74081623b692a89"},
-    {file = "slack_sdk-3.41.0.tar.gz", hash = "sha256:eb61eb12a65bebeca9cb5d36b3f799e836ed2be21b456d15df2627cfe34076ca"},
-]
-
-[package.extras]
-optional = ["SQLAlchemy (>=1.4,<3)", "aiodns (>1.0)", "aiohttp (>=3.7.3,<4)", "boto3 (<=2)", "websocket-client (>=1,<2)", "websockets (>=9.1,<16)"]
 
 [[package]]
 name = "sniffio"
@@ -6008,100 +5808,6 @@ typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
-name = "strands-agents"
-version = "1.32.0"
-description = "A model-driven approach to building AI agents in just a few lines of code"
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "strands_agents-1.32.0-py3-none-any.whl", hash = "sha256:60c0eaae32ee1fc366ecebb10bca07681015104c111472a7378f71bbcdedbba4"},
-    {file = "strands_agents-1.32.0.tar.gz", hash = "sha256:2e399bc5ea98d91dbcdf79913115aa579a6bb3251dfe6c15be114821cad893a4"},
-]
-
-[package.dependencies]
-boto3 = ">=1.26.0,<2.0.0"
-botocore = ">=1.29.0,<2.0.0"
-docstring-parser = ">=0.15,<1.0"
-jsonschema = ">=4.0.0,<5.0.0"
-mcp = ">=1.23.0,<2.0.0"
-opentelemetry-api = ">=1.30.0,<2.0.0"
-opentelemetry-instrumentation-threading = ">=0.51b0,<1.0b0"
-opentelemetry-sdk = ">=1.30.0,<2.0.0"
-pydantic = ">=2.4.0,<3.0.0"
-pyyaml = ">=6.0.0,<7.0.0"
-typing-extensions = ">=4.13.2,<5.0.0"
-watchdog = ">=6.0.0,<7.0.0"
-
-[package.extras]
-a2a = ["a2a-sdk (>=0.3.0,<0.4.0)", "a2a-sdk[sql] (>=0.3.0,<0.4.0)", "fastapi (>=0.115.12,<1.0.0)", "httpx (>=0.28.1,<1.0.0)", "starlette (>=0.46.2,<1.0.0)", "uvicorn (>=0.34.2,<1.0.0)"]
-all = ["a2a-sdk (>=0.3.0,<0.4.0)", "a2a-sdk[sql] (>=0.3.0,<0.4.0)", "anthropic (>=0.21.0,<1.0.0)", "boto3-stubs[sagemaker-runtime] (>=1.26.0,<2.0.0)", "fastapi (>=0.115.12,<1.0.0)", "google-genai (>=1.32.0,<2.0.0)", "httpx (>=0.28.1,<1.0.0)", "litellm (>=1.75.9,<2.0.0)", "llama-api-client (>=0.1.0,<1.0.0)", "mistralai (>=1.8.2,<2.0.0)", "ollama (>=0.4.8,<1.0.0)", "openai (>=1.68.0,<3.0.0)", "opentelemetry-exporter-otlp-proto-http (>=1.30.0,<2.0.0)", "sphinx (>=5.0.0,<10.0.0)", "sphinx-autodoc-typehints (>=1.12.0,<4.0.0)", "sphinx-rtd-theme (>=1.0.0,<4.0.0)", "starlette (>=0.46.2,<1.0.0)", "uvicorn (>=0.34.2,<1.0.0)", "writer-sdk (>=2.2.0,<3.0.0)"]
-anthropic = ["anthropic (>=0.21.0,<1.0.0)"]
-bidi = ["aws-sdk-bedrock-runtime (>=0.4.0,<1.0.0) ; python_version >= \"3.12\"", "smithy-aws-core (>=0.4.0,<1.0.0) ; python_version >= \"3.12\""]
-bidi-all = ["a2a-sdk (>=0.3.0,<0.4.0)", "a2a-sdk[sql] (>=0.3.0,<0.4.0)", "aws-sdk-bedrock-runtime (>=0.4.0,<1.0.0) ; python_version >= \"3.12\"", "fastapi (>=0.115.12,<1.0.0)", "google-genai (>=1.32.0,<2.0.0)", "httpx (>=0.28.1,<1.0.0)", "opentelemetry-exporter-otlp-proto-http (>=1.30.0,<2.0.0)", "prompt-toolkit (>=3.0.0,<4.0.0)", "pyaudio (>=0.2.13,<1.0.0)", "smithy-aws-core (>=0.4.0,<1.0.0) ; python_version >= \"3.12\"", "sphinx (>=5.0.0,<10.0.0)", "sphinx-autodoc-typehints (>=1.12.0,<4.0.0)", "sphinx-rtd-theme (>=1.0.0,<4.0.0)", "starlette (>=0.46.2,<1.0.0)", "uvicorn (>=0.34.2,<1.0.0)", "websockets (>=15.0.0,<17.0.0)"]
-bidi-gemini = ["google-genai (>=1.32.0,<2.0.0)"]
-bidi-io = ["prompt-toolkit (>=3.0.0,<4.0.0)", "pyaudio (>=0.2.13,<1.0.0)"]
-bidi-openai = ["websockets (>=15.0.0,<17.0.0)"]
-dev = ["commitizen (>=4.4.0,<5.0.0)", "hatch (>=1.0.0,<2.0.0)", "moto (>=5.1.0,<6.0.0)", "mypy (>=1.15.0,<2.0.0)", "pre-commit (>=3.2.0,<4.6.0)", "pytest (>=9.0.0,<10.0.0)", "pytest-asyncio (>=1.0.0,<1.4.0)", "pytest-cov (>=7.0.0,<8.0.0)", "pytest-timeout (>=2.0.0,<3.0.0)", "pytest-xdist (>=3.0.0,<4.0.0)", "ruff (>=0.13.0,<0.15.0)", "tenacity (>=9.0.0,<10.0.0)"]
-docs = ["sphinx (>=5.0.0,<10.0.0)", "sphinx-autodoc-typehints (>=1.12.0,<4.0.0)", "sphinx-rtd-theme (>=1.0.0,<4.0.0)"]
-gemini = ["google-genai (>=1.32.0,<2.0.0)"]
-litellm = ["litellm (>=1.75.9,<2.0.0)", "openai (>=1.68.0,<3.0.0)"]
-llamaapi = ["llama-api-client (>=0.1.0,<1.0.0)"]
-mistral = ["mistralai (>=1.8.2,<2.0.0)"]
-ollama = ["ollama (>=0.4.8,<1.0.0)"]
-openai = ["openai (>=1.68.0,<3.0.0)"]
-otel = ["opentelemetry-exporter-otlp-proto-http (>=1.30.0,<2.0.0)"]
-sagemaker = ["boto3-stubs[sagemaker-runtime] (>=1.26.0,<2.0.0)", "openai (>=1.68.0,<3.0.0)"]
-writer = ["writer-sdk (>=2.2.0,<3.0.0)"]
-
-[[package]]
-name = "strands-agents-tools"
-version = "0.2.23"
-description = "A collection of specialized tools for Strands Agents"
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "strands_agents_tools-0.2.23-py3-none-any.whl", hash = "sha256:d98b602002eb978850a32d597f94262dd3a95c6871ab2007fbb0ad165799d8df"},
-    {file = "strands_agents_tools-0.2.23.tar.gz", hash = "sha256:40d0c30859f0cf00c62f5efacdb917ae541c7fe9affceee5adb63ba49657f887"},
-]
-
-[package.dependencies]
-aiohttp = ">=3.8.0,<4.0.0"
-aws-requests-auth = ">=0.4.3,<0.5.0"
-botocore = ">=1.39.7,<2.0.0"
-dill = ">=0.4.0,<0.5.0"
-markdownify = ">=1.0.0,<2.0.0"
-pillow = ">=12.1.1,<13.0.0"
-prompt-toolkit = ">=3.0.51,<4.0.0"
-pyjwt = ">=2.10.1,<3.0.0"
-requests = ">=2.28.0,<3.0.0"
-rich = ">=14.0.0,<15.0.0"
-slack-bolt = ">=1.23.0,<2.0.0"
-strands-agents = ">=1.0.0"
-sympy = ">=1.12.0,<2.0.0"
-tenacity = ">=9.1.2,<10.0.0"
-typing-extensions = ">=4.0.0,<5.0.0"
-tzdata = {version = "*", markers = "platform_system == \"Windows\""}
-watchdog = ">=6.0.0,<7.0.0"
-
-[package.extras]
-a2a-client = ["a2a-sdk[sql] (>=0.3.0,<0.4.0)"]
-agent-core-browser = ["bedrock-agentcore (>=1.1.0,<1.2.0)", "nest-asyncio (>=1.5.0,<2.0.0)", "playwright (>=1.42.0,<2.0.0)"]
-agent-core-code-interpreter = ["bedrock-agentcore (>=1.1.0,<1.2.0)"]
-build = ["hatch (>=1.16.5)"]
-dev = ["commitizen (>=4.4.0,<5.0.0)", "hatch (>=1.16.5)", "mem0ai (>=0.1.104,<1.0.0)", "mypy (>=0.981,<1.0.0)", "nest-asyncio (>=1.5.0,<2.0.0)", "opensearch-py (>=2.8.0,<3.0.0)", "playwright (>=1.42.0,<2.0.0)", "pre-commit (>=3.2.0,<4.2.0)", "pytest (>=8.0.0,<10.0.0)", "responses (>=0.6.1,<1.0.0)", "ruff (>=0.13.0,<0.14.0)", "twelvelabs (>=0.4.0,<1.0.0)"]
-diagram = ["diagrams (>=0.23.0,<1.0.0)", "graphviz (>=0.20.0,<1.0.0)", "matplotlib (>=3.5.0,<4.0.0)", "networkx (>=2.8.0,<4.0.0)"]
-docs = ["sphinx (>=5.0.0,<6.0.0)", "sphinx-autodoc-typehints (>=1.12.0,<2.0.0)", "sphinx-rtd-theme (>=1.0.0,<2.0.0)"]
-elasticsearch-memory = ["elasticsearch (>=8.0.0,<9.0.0)"]
-local-chromium-browser = ["nest-asyncio (>=1.5.0,<2.0.0)", "playwright (>=1.42.0,<2.0.0)"]
-mem0-memory = ["mem0ai (>=0.1.99,<1.0.0)", "opensearch-py (>=2.8.0,<3.0.0)"]
-mongodb-memory = ["pymongo (>=4.0.0,<5.0.0)"]
-rss = ["feedparser (>=6.0.10,<7.0.0)", "html2text (>=2020.1.16,<2021.0.0)"]
-twelvelabs = ["twelvelabs (>=0.4.0,<1.0.0)"]
-use-computer = ["opencv-python (>=4.5.0,<5.0.0)", "psutil (>=5.8.0,<6.0.0)", "pyautogui (>=0.9.53,<1.0.0)", "pytesseract (>=0.3.8,<1.0.0)"]
-
-[[package]]
 name = "striprtf"
 version = "0.0.26"
 description = "A simple library to convert rtf to text"
@@ -6112,24 +5818,6 @@ files = [
     {file = "striprtf-0.0.26-py3-none-any.whl", hash = "sha256:8c8f9d32083cdc2e8bfb149455aa1cc5a4e0a035893bedc75db8b73becb3a1bb"},
     {file = "striprtf-0.0.26.tar.gz", hash = "sha256:fdb2bba7ac440072d1c41eab50d8d74ae88f60a8b6575c6e2c7805dc462093aa"},
 ]
-
-[[package]]
-name = "sympy"
-version = "1.14.0"
-description = "Computer algebra system (CAS) in Python"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"},
-    {file = "sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517"},
-]
-
-[package.dependencies]
-mpmath = ">=1.1.0,<1.4"
-
-[package.extras]
-dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
 
 [[package]]
 name = "tenacity"
@@ -7380,4 +7068,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "0761cdd7a7faa573128d259a8120da7fa044a89e289925a701817ca7da86debd"
+content-hash = "76e552bf2216d928a6fa16474e58a7868ada169e3ba56f9fd7187fdfed6ba3e8"

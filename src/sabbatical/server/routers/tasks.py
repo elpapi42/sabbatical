@@ -114,6 +114,7 @@ async def list_tasks(
         cost_data = await sum_run_costs(db, task_id=r["id"])
 
         elapsed = None
+        total_dur = None
         if r["status"] == "in_progress":
             run = await db.fetch_one(
                 "SELECT started_at FROM runs WHERE task_id = :tid AND status = 'running'",
@@ -124,6 +125,16 @@ async def list_tasks(
                     run["started_at"].replace("Z", "+00:00")
                 )
                 elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        elif r["status"] in ("done", "failed", "canceled"):
+            dur_row = await db.fetch_one(
+                """SELECT SUM(
+                    CAST((julianday(ended_at) - julianday(started_at)) * 86400 AS REAL)
+                ) as total_dur FROM runs
+                WHERE task_id = :tid AND ended_at IS NOT NULL""",
+                {"tid": r["id"]},
+            )
+            if dur_row and dur_row["total_dur"] is not None:
+                total_dur = dur_row["total_dur"]
 
         tasks.append(
             TaskSummary(
@@ -136,6 +147,7 @@ async def list_tasks(
                     r["created_at"].replace("Z", "+00:00")
                 ),
                 current_run_elapsed_seconds=elapsed,
+                total_duration_seconds=total_dur,
                 **cost_data,
             ).model_dump()
         )
@@ -353,9 +365,10 @@ async def reopen_task(id: str, db=Depends(get_db)):
             return JSONResponse(
                 status_code=404, content={"message": f"Task '{id}' not found."}
             )
-        if task["status"] != "done":
+        if task["status"] not in ("done", "failed"):
             return JSONResponse(
-                status_code=409, content={"message": "Only done tasks can be reopened."}
+                status_code=409,
+                content={"message": "Only done or failed tasks can be reopened."},
             )
 
         await db.execute(
@@ -368,6 +381,64 @@ async def reopen_task(id: str, db=Depends(get_db)):
         )
 
     return {"id": id, "status": "open", "assignee": "user"}
+
+
+@router.post("/tasks/{id}/retry")
+async def retry_task(id: str, assignee: Optional[str] = None, db=Depends(get_db)):
+    now = utc_now()
+    async with db.transaction():
+        task = await db.fetch_one(
+            "SELECT status, organization_name FROM tasks WHERE id = :id", {"id": id}
+        )
+        if not task:
+            return JSONResponse(
+                status_code=404, content={"message": f"Task '{id}' not found."}
+            )
+        if task["status"] not in ("done", "failed"):
+            return JSONResponse(
+                status_code=409,
+                content={"message": "Only done or failed tasks can be retried."},
+            )
+
+        # Determine the target agent
+        target = assignee
+        if not target:
+            # Default: find the last non-system, non-user agent that worked on this task
+            last_run = await db.fetch_one(
+                "SELECT agent_name FROM runs WHERE task_id = :tid ORDER BY started_at DESC LIMIT 1",
+                {"tid": id},
+            )
+            if last_run:
+                target = last_run["agent_name"]
+
+        if not target:
+            return JSONResponse(
+                status_code=400,
+                content={"message": "No agent specified and no previous run found. Use --assign to specify an agent."},
+            )
+
+        # Validate agent exists
+        agent = await db.fetch_one(
+            "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
+            {"name": target, "org": task["organization_name"]},
+        )
+        if not agent:
+            return JSONResponse(
+                status_code=404,
+                content={"message": f"Agent '{target}' not found in organization."},
+            )
+
+        # Reopen and assign in one transaction
+        await db.execute(
+            "UPDATE tasks SET status = 'open', assignee = :assignee, queued_at = :now WHERE id = :id",
+            {"assignee": target, "now": now, "id": id},
+        )
+        await db.execute(
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', :body, :now)",
+            {"tid": id, "body": f"[SYSTEM: Task retried — assigned to {target}]", "now": now},
+        )
+
+    return {"id": id, "status": "open", "assignee": target}
 
 
 @router.post("/tasks/{id}/cancel")

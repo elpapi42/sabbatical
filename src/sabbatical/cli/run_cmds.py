@@ -24,11 +24,12 @@ def list_runs(task: str = typer.Option(..., "--task", help="Task ID")):
             resp = client.get(f"/tasks/{task}/runs")
             resp.raise_for_status()
             data = resp.json()["runs"]
-            headers = ["Run ID", "Agent", "Status", "Duration (s)", "Cost ($)"]
+            headers = ["Run ID", "Agent", "Model", "Status", "Duration (s)", "Cost ($)"]
             rows = [
                 [
                     r["id"],
                     r["agent"],
+                    r.get("model_used") or "(default)",
                     r["status"],
                     f"{r['duration_seconds']:.1f}"
                     if r.get("duration_seconds") is not None

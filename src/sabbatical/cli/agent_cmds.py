@@ -72,10 +72,11 @@ def list_agents(
             )
             resp.raise_for_status()
             data = resp.json()["agents"]
-            headers = ["Name", "Boss", "Model", "Max Iterations", "Cost ($)"]
+            headers = ["Name", "Description", "Boss", "Model", "Max Iterations", "Cost ($)"]
             rows = [
                 [
                     a["name"],
+                    a.get("description") or "",
                     a["boss"] or "None",
                     a.get("model") or "(default)",
                     str(a["max_iterations"]),

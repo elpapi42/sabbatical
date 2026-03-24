@@ -133,6 +133,7 @@ class TaskSummary(BaseModel):
     total_cost: float
     created_at: datetime
     current_run_elapsed_seconds: Optional[float] = None
+    total_duration_seconds: Optional[float] = None
 
 
 class TimelineComment(BaseModel):
@@ -194,6 +195,7 @@ class RunSummary(BaseModel):
     status: str
     duration_seconds: Optional[float]
     total_cost: float
+    model_used: Optional[str] = None
     started_at: datetime
     ended_at: Optional[datetime]
 
