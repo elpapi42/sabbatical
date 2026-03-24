@@ -28,6 +28,9 @@ def up():
         except OSError:
             PID_PATH.unlink()
 
+    log_path = SABBATICAL_DIR / "server.log"
+    log_file = open(log_path, "a")
+
     proc = subprocess.Popen(
         [
             "uvicorn",
@@ -39,11 +42,16 @@ def up():
             str(config.server.port),
         ],
         start_new_session=True,
+        stdout=log_file,
+        stderr=log_file,
     )
+    log_file.close()
+
     PID_PATH.write_text(str(proc.pid))
     typer.echo(
         f"Sabbatical server starting on {config.server.host}:{config.server.port} (PID {proc.pid})"
     )
+    typer.echo(f"Logs: {log_path}")
 
 
 @server_app.command()

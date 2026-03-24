@@ -67,7 +67,7 @@ def view(id: str):
                     typer.echo(
                         f"Args: {json.dumps(step.get('arguments', {}), indent=2)}"
                     )
-                    out = step.get("output", "")
+                    out = step.get("output") or ""
                     # truncate very long outputs for display
                     if len(out) > 500:
                         out = out[:500] + "\n... [truncated]"

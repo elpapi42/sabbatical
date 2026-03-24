@@ -4,7 +4,6 @@ import uuid
 from google.adk import Agent, Runner
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
-from google.genai import types
 
 from sabbatical.agent.tools import create_workspace_tools
 

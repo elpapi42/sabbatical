@@ -32,7 +32,6 @@ dependencies = [
     "sse-starlette>=2.1.0",
     "prompt-toolkit>=3.0.0",
     "google-adk[extensions]>=0.1.0",
-    "strands-agents-tools (>=0.2.23,<0.3.0)"
 ]
 
 [project.urls]

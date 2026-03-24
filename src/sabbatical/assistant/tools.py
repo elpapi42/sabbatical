@@ -2,12 +2,12 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from strands_tools.file_read import file_read
+from sabbatical.agent.tools import create_file_read_tool
 
 SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def create_assistant_tools(db, organization_scope=None):
+def create_assistant_tools(db, organization_scope=None, workspace_path=None):
     async def create_organization(
         name: str, workspace_path: str, description: str = ""
     ) -> str:
@@ -192,12 +192,16 @@ def create_assistant_tools(db, organization_scope=None):
             ]
         )
 
-    return [
+    tools = [
         create_organization,
         write_instructions_file,
         add_agent,
         create_task,
         list_agents,
         list_tasks,
-        file_read,
     ]
+
+    if workspace_path:
+        tools.append(create_file_read_tool(workspace_path))
+
+    return tools

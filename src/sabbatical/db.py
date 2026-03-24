@@ -206,6 +206,9 @@ class _PragmaPool:
     async def release(self, connection):
         await self._pool.release(connection)
 
+    def __getattr__(self, name):
+        return getattr(self._pool, name)
+
 
 async def get_database(db_path: str) -> databases.Database:
     """Create and connect a databases.Database instance."""

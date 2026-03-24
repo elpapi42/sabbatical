@@ -1,12 +1,7 @@
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-
-# Configure strands-agents-tools for headless agent execution
-os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
-os.environ.setdefault("STRANDS_TOOL_CONSOLE_MODE", "disabled")
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig

@@ -142,7 +142,7 @@ async def send_message(
             {"title": new_title, "id": session_id},
         )
 
-    runner = create_assistant_agent(config, db, db_session["organization_scope"])
+    runner = await create_assistant_agent(config, db, db_session["organization_scope"])
 
     # Initialize the ADK session and capture the returned session object
     adk_session = await runner.session_service.create_session(

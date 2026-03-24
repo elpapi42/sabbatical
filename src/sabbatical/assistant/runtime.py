@@ -62,13 +62,22 @@ This is read-only access — use it to write better task specs and make smarter 
 - You are not an agent. Do not confuse your role with theirs."""
 
 
-def create_assistant_agent(config, db, organization_scope=None):
+async def create_assistant_agent(config, db, organization_scope=None):
     llm = LiteLlm(
         model=f"openrouter/{config.llm.assistant_model}",
         api_key=config.llm.openrouter_api_key,
     )
 
-    tools = create_assistant_tools(db, organization_scope)
+    workspace_path = None
+    if organization_scope:
+        org_row = await db.fetch_one(
+            "SELECT workspace_path FROM organizations WHERE name = :name",
+            {"name": organization_scope},
+        )
+        if org_row:
+            workspace_path = org_row["workspace_path"]
+
+    tools = create_assistant_tools(db, organization_scope, workspace_path=workspace_path)
 
     instruction = ASSISTANT_SYSTEM_PROMPT
 
