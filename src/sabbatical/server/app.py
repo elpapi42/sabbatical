@@ -6,6 +6,8 @@ from pathlib import Path
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from sabbatical.config import CONFIG_PATH, load_config
 from sabbatical.db import get_database
@@ -79,4 +81,22 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
     app.include_router(sessions.router, prefix="/api")
+
+    # Serve the web application if built static files exist
+    web_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
+    if web_dist.exists():
+        assets_dir = web_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="web-assets")
+
+        index_html = web_dist / "index.html"
+
+        @app.get("/{path:path}")
+        async def serve_spa(path: str):
+            # Serve static files directly if they exist, otherwise serve index.html for SPA routing
+            static_file = web_dist / path
+            if static_file.is_file() and ".." not in path:
+                return FileResponse(static_file)
+            return FileResponse(index_html)
+
     return app

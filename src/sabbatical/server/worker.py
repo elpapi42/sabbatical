@@ -80,24 +80,17 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             session_id=session_id,
             new_message=user_message,
         ):
+            # Extract text from event content parts
+            text = ""
             if event.content and event.content.parts:
-                text = "".join(p.text for p in event.content.parts if p.text)
+                text = "".join(
+                    p.text for p in event.content.parts if p.text
+                )
                 if text:
                     final_text_parts.append(text)
 
-            if event.get_function_calls():
-                for fc in event.get_function_calls():
-                    step_count += 1
-                    logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
-                    steps.append(
-                        {
-                            "step": step_count,
-                            "type": "tool_call",
-                            "tool": fc.name,
-                            "arguments": dict(fc.args) if fc.args else {},
-                        }
-                    )
-            elif event.content and not event.partial:
+            # Record reasoning text (even if the event also contains tool calls)
+            if text and not event.partial:
                 step_count += 1
                 logger.debug("llm step run_id=%s step=%d", run_id, step_count)
                 steps.append(
@@ -105,6 +98,19 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                         "step": step_count,
                         "type": "llm_reasoning",
                         "content": text,
+                    }
+                )
+
+            # Record tool calls
+            for fc in event.get_function_calls():
+                step_count += 1
+                logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
+                steps.append(
+                    {
+                        "step": step_count,
+                        "type": "tool_call",
+                        "tool": fc.name,
+                        "arguments": dict(fc.args) if fc.args else {},
                     }
                 )
 
