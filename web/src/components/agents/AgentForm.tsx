@@ -23,7 +23,6 @@ export default function AgentForm({
   onClose,
 }: Props) {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [boss, setBoss] = useState("");
   const [instructionsPath, setInstructionsPath] = useState("");
   const [maxIterations, setMaxIterations] = useState("");
@@ -38,14 +37,12 @@ export default function AgentForm({
   useEffect(() => {
     if (!open) return;
     if (mode === "edit" && agent) {
-      setDescription(agent.description ?? "");
       setBoss(agent.boss ?? "");
       setInstructionsPath(agent.instructions_path);
       setMaxIterations(agent.max_iterations?.toString() ?? "");
       setModel(agent.model ?? "");
     } else {
       setName("");
-      setDescription("");
       setBoss("");
       setInstructionsPath("");
       setMaxIterations("");
@@ -76,7 +73,6 @@ export default function AgentForm({
       if (mode === "create") {
         await createMut.mutateAsync({
           name,
-          description: description || undefined,
           boss: boss || undefined,
           instructions_path: instructionsPath,
           max_iterations: maxIterations ? parseInt(maxIterations) : undefined,
@@ -85,7 +81,6 @@ export default function AgentForm({
         toast("Agent added", "success");
       } else {
         await updateMut.mutateAsync({
-          description: description || undefined,
           boss: boss === "" ? null : boss || undefined,
           instructions_path: instructionsPath || undefined,
           max_iterations: maxIterations ? parseInt(maxIterations) : undefined,
@@ -140,19 +135,6 @@ export default function AgentForm({
               </div>
             </div>
           )}
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-300">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description..."
-              rows={2}
-              className="w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-primary-500 focus:outline-none resize-none"
-            />
-          </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-300">

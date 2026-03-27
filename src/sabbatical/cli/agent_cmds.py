@@ -23,9 +23,6 @@ def add(
     instructions_path: str = typer.Option(
         ..., "--instructions", help="Path to the .md file"
     ),
-    description: Optional[str] = typer.Option(
-        None, "--description", help="Brief role description"
-    ),
     boss: Optional[str] = typer.Option(None, "--boss", help="Name of Boss agent"),
     max_iterations: Optional[int] = typer.Option(
         None, "--max-iterations", help="LLM turn iteration limit"
@@ -41,8 +38,6 @@ def add(
                 "name": name,
                 "instructions_path": instructions_path,
             }
-            if description:
-                payload["description"] = description
             if boss:
                 payload["boss"] = boss
             if max_iterations is not None:
@@ -118,9 +113,6 @@ def view(
 def edit(
     name: str,
     organization: str = typer.Option(..., "--organization", help="Organization name"),
-    description: Optional[str] = typer.Option(
-        None, "--description", help="Update description"
-    ),
     boss: Optional[str] = typer.Option(
         None, "--boss", help="Reassign boss (use 'none' for root)"
     ),
@@ -135,14 +127,12 @@ def edit(
     ),
 ):
     """Modify an agent's profile."""
-    if not any([description, boss, instructions_path, max_iterations is not None, model is not None]):
+    if not any([boss, instructions_path, max_iterations is not None, model is not None]):
         typer.echo("Nothing to update.")
         return
     with get_client() as client:
         try:
             payload = {}
-            if description:
-                payload["description"] = description
             if boss:
                 payload["boss"] = None if boss.lower() == "none" else boss
             if instructions_path:

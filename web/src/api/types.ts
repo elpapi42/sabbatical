@@ -69,7 +69,6 @@ export interface OrganizationDetail {
 // Agents
 export interface AgentCreate {
   name: string;
-  description?: string;
   boss?: string;
   instructions_path: string;
   max_iterations?: number;
@@ -77,7 +76,6 @@ export interface AgentCreate {
 }
 
 export interface AgentUpdate {
-  description?: string;
   boss?: string | null;
   instructions_path?: string;
   max_iterations?: number;

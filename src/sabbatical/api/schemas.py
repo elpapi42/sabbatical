@@ -73,7 +73,6 @@ class OrganizationDetail(BaseModel):
 
 class AgentCreate(BaseModel):
     name: str
-    description: Optional[str] = None
     boss: Optional[str] = None
     instructions_path: str
     max_iterations: Optional[int] = None
@@ -86,7 +85,6 @@ class AgentCreate(BaseModel):
 
 
 class AgentUpdate(BaseModel):
-    description: Optional[str] = None
     boss: Optional[str] = None  # null means promote to root
     instructions_path: Optional[str] = None
     max_iterations: Optional[int] = None

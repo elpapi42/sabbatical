@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import JSONResponse
 
 from sabbatical.api.schemas import (
@@ -11,6 +11,7 @@ from sabbatical.api.schemas import (
     AgentUpdate,
 )
 from sabbatical.core.cost import sum_run_costs
+from sabbatical.core.description_generator import generate_description
 from sabbatical.api.dependencies import get_config, get_db
 
 router = APIRouter(tags=["Agents"])
@@ -22,6 +23,7 @@ router = APIRouter(tags=["Agents"])
 async def add_agent(
     organization: str,
     agent: AgentCreate,
+    background_tasks: BackgroundTasks,
     db=Depends(get_db),
     config=Depends(get_config),
 ):
@@ -68,14 +70,13 @@ async def add_agent(
 
         if existing and existing["is_removed"]:
             await db.execute(
-                """UPDATE agents SET description = :description, boss = :boss,
+                """UPDATE agents SET description = NULL, boss = :boss,
                    instructions_path = :path, max_iterations = :max_iter, model = :model,
                    is_removed = 0
                    WHERE name = :name AND organization_name = :org""",
                 {
                     "name": agent.name,
                     "org": organization,
-                    "description": agent.description,
                     "boss": agent.boss,
                     "path": agent.instructions_path,
                     "max_iter": max_iter,
@@ -84,12 +85,11 @@ async def add_agent(
             )
         else:
             await db.execute(
-                """INSERT INTO agents (name, organization_name, description, boss, instructions_path, max_iterations, model)
-                   VALUES (:name, :org, :description, :boss, :path, :max_iter, :model)""",
+                """INSERT INTO agents (name, organization_name, boss, instructions_path, max_iterations, model)
+                   VALUES (:name, :org, :boss, :path, :max_iter, :model)""",
                 {
                     "name": agent.name,
                     "org": organization,
-                    "description": agent.description,
                     "boss": agent.boss,
                     "path": agent.instructions_path,
                     "max_iter": max_iter,
@@ -97,10 +97,14 @@ async def add_agent(
                 },
             )
 
+    background_tasks.add_task(
+        _generate_and_store_description, db, config, agent.name, organization, agent.instructions_path
+    )
+
     return {
         "name": agent.name,
         "organization": organization,
-        "description": agent.description,
+        "description": None,
         "boss": agent.boss,
         "instructions_path": agent.instructions_path,
         "max_iterations": max_iter,
@@ -189,7 +193,12 @@ async def get_agent(organization: str, name: str, db=Depends(get_db)):
 
 @router.patch("/organizations/{organization}/agents/{name}")
 async def update_agent(
-    organization: str, name: str, update: AgentUpdate, db=Depends(get_db)
+    organization: str,
+    name: str,
+    update: AgentUpdate,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db),
+    config=Depends(get_config),
 ):
     if not update.model_dump(exclude_unset=True):
         return JSONResponse(
@@ -219,10 +228,10 @@ async def update_agent(
             )
 
         updates = {}
-        if update.description is not None:
-            updates["description"] = update.description
+        new_instructions_path = None
         if update.instructions_path is not None:
             updates["instructions_path"] = update.instructions_path
+            new_instructions_path = update.instructions_path
         if update.max_iterations is not None:
             updates["max_iterations"] = update.max_iterations
         provided = update.model_dump(exclude_unset=True)
@@ -243,6 +252,11 @@ async def update_agent(
                 f"UPDATE agents SET {set_clause} WHERE name = :name AND organization_name = :org",
                 values,
             )
+
+    if new_instructions_path:
+        background_tasks.add_task(
+            _generate_and_store_description, db, config, name, organization, new_instructions_path
+        )
 
     return await get_agent(organization, name, db)
 
@@ -292,3 +306,12 @@ async def delete_agent(organization: str, name: str, db=Depends(get_db)):
             ]
 
     return {"removed": name, "warnings": warnings}
+
+
+async def _generate_and_store_description(db, config, agent_name, organization, instructions_path):
+    description = await generate_description(instructions_path, config)
+    if description:
+        await db.execute(
+            "UPDATE agents SET description = :description WHERE name = :name AND organization_name = :org",
+            {"description": description, "name": agent_name, "org": organization},
+        )

@@ -39,8 +39,7 @@ export default function TasksPage() {
             // Navigate handled by TaskForm closing + cache invalidation
             navigate(links.task(id));
           }}
-          defaultOrg={orgName}
-          orgLocked
+          organization={orgName!}
         />
       </div>
     </>
