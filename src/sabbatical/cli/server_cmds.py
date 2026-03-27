@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 import typer
 
-from sabbatical.config import SABBATICAL_DIR, load_config
+from sabbatical.core.config import SABBATICAL_DIR, load_config
 
 server_app = typer.Typer(help="Server management commands")
 
@@ -34,7 +34,7 @@ def up():
     proc = subprocess.Popen(
         [
             "uvicorn",
-            "sabbatical.server.app:create_app",
+            "sabbatical.api.app:create_app",
             "--factory",
             "--host",
             config.server.host,

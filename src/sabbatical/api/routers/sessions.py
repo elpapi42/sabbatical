@@ -10,15 +10,15 @@ from google.adk.events import Event
 from google.genai import types
 from sse_starlette.sse import EventSourceResponse
 
-from sabbatical.assistant.runtime import create_assistant_agent
-from sabbatical.models import (
+from sabbatical.core.assistant.runtime import create_assistant_agent
+from sabbatical.api.schemas import (
     MessageCreate,
     SessionCreate,
     SessionDetail,
     SessionMessage,
     SessionSummary,
 )
-from sabbatical.server.dependencies import get_config, get_db
+from sabbatical.api.dependencies import get_config, get_db
 
 router = APIRouter(tags=["Sessions"])
 

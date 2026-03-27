@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
 )
 
-from sabbatical.config import SABBATICAL_DIR, load_config
+from sabbatical.core.config import SABBATICAL_DIR, load_config
 
 metadata = MetaData()
 

@@ -2,8 +2,8 @@ import asyncio
 
 from fastapi import APIRouter, Depends, Request
 
-from sabbatical.server.cost import system_total_cost
-from sabbatical.server.dependencies import get_db, get_dispatcher
+from sabbatical.core.cost import system_total_cost
+from sabbatical.api.dependencies import get_db, get_dispatcher
 
 router = APIRouter(tags=["Status"])
 

@@ -219,7 +219,7 @@ def create_thread_tools(thread_state: dict, valid_route_targets: set[str]) -> li
 
     valid_route_targets: set of agent names + "user" that are valid @tag targets.
     """
-    from sabbatical.server.tag_parser import extract_all_tags
+    from sabbatical.core.tag_parser import extract_all_tags
 
     def add_comment(message: str, is_final: bool = False, tool_context=None) -> str:
         """Post a comment to the task's comment thread.

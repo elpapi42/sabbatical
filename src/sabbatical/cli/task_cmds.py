@@ -10,7 +10,7 @@ from sabbatical.cli.formatters import (
     print_table,
     print_task_tray,
 )
-from sabbatical.config import load_config
+from sabbatical.core.config import load_config
 
 task_app = typer.Typer(help="Task management commands")
 

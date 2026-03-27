@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from sabbatical.models import ExecutionStep, RunDetail, RunSummary
-from sabbatical.server.dependencies import get_broadcaster, get_db
+from sabbatical.api.schemas import ExecutionStep, RunDetail, RunSummary
+from sabbatical.api.dependencies import get_broadcaster, get_db
 
 router = APIRouter(tags=["Runs"])
 

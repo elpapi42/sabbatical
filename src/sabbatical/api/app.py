@@ -9,12 +9,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from sabbatical.config import CONFIG_PATH, load_config
-from sabbatical.db import get_database
-from sabbatical.logging_setup import setup_logging
-from sabbatical.server.broadcast import RunEventBroadcaster
-from sabbatical.server.dispatcher import Dispatcher
-from sabbatical.server.routers import (
+from sabbatical.core.config import CONFIG_PATH, load_config
+from sabbatical.core.db import get_database
+from sabbatical.core.logging_setup import setup_logging
+from sabbatical.api.broadcast import RunEventBroadcaster
+from sabbatical.core.dispatcher import Dispatcher
+from sabbatical.api.routers import (
     agents,
     organizations,
     runs,

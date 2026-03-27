@@ -4,15 +4,15 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from sabbatical.models import (
+from sabbatical.api.schemas import (
     AgentNode,
     OrganizationCreate,
     OrganizationDetail,
     OrganizationSummary,
     OrganizationUpdate,
 )
-from sabbatical.server.cost import organization_total_cost
-from sabbatical.server.dependencies import get_db
+from sabbatical.core.cost import organization_total_cost
+from sabbatical.api.dependencies import get_db
 
 router = APIRouter(tags=["Organizations"])
 

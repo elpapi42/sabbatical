@@ -1,7 +1,7 @@
 import databases
 from fastapi import Request
 
-from sabbatical.config import SabbaticalConfig
+from sabbatical.core.config import SabbaticalConfig
 
 
 async def get_db(request: Request) -> databases.Database:

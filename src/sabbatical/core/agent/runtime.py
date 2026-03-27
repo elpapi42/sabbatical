@@ -5,7 +5,7 @@ from google.adk import Agent, Runner
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
 
-from sabbatical.agent.tools import create_thread_tools, create_workspace_tools
+from sabbatical.core.agent.tools import create_thread_tools, create_workspace_tools
 
 logger = logging.getLogger(__name__)
 

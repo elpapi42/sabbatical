@@ -3,15 +3,15 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
-from sabbatical.models import (
+from sabbatical.api.schemas import (
     AgentCreate,
     AgentDetail,
     AgentNode,
     AgentSummary,
     AgentUpdate,
 )
-from sabbatical.server.cost import sum_run_costs
-from sabbatical.server.dependencies import get_config, get_db
+from sabbatical.core.cost import sum_run_costs
+from sabbatical.api.dependencies import get_config, get_db
 
 router = APIRouter(tags=["Agents"])
 

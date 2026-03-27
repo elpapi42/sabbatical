@@ -5,7 +5,7 @@ import httpx
 import typer
 
 from sabbatical.cli.formatters import print_json_error, print_table
-from sabbatical.config import load_config
+from sabbatical.core.config import load_config
 
 chat_app = typer.Typer(help="Conversational Assistant commands")
 

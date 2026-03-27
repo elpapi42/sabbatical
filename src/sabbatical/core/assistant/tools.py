@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sabbatical.agent.tools import create_file_read_tool
+from sabbatical.core.agent.tools import create_file_read_tool
 
 SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 

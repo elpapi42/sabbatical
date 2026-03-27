@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sabbatical.server.worker import run_agent_worker
+from sabbatical.core.worker import run_agent_worker
 
 logger = logging.getLogger(__name__)
 

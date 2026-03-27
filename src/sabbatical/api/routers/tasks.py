@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
-from sabbatical.models import (
+from sabbatical.api.schemas import (
     CommentCreate,
     TaskCreate,
     TaskDetail,
@@ -12,9 +12,9 @@ from sabbatical.models import (
     TimelineComment,
     TimelineRunSummary,
 )
-from sabbatical.server.cost import sum_run_costs
-from sabbatical.server.dependencies import get_db, get_dispatcher
-from sabbatical.server.tag_parser import resolve_first_valid_tag
+from sabbatical.core.cost import sum_run_costs
+from sabbatical.api.dependencies import get_db, get_dispatcher
+from sabbatical.core.tag_parser import resolve_first_valid_tag
 
 router = APIRouter(tags=["Tasks"])
 

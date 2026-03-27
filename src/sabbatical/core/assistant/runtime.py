@@ -2,7 +2,7 @@ from google.adk import Agent, Runner
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
 
-from sabbatical.assistant.tools import create_assistant_tools
+from sabbatical.core.assistant.tools import create_assistant_tools
 
 ASSISTANT_SYSTEM_PROMPT = """You are the Sabbatical Assistant — a conversational planning copilot for the Sabbatical AI agent orchestration system.
 
