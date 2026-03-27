@@ -92,7 +92,7 @@ Modify an agent's profile.
   * `--description "<text>"` — Update the agent's description.
   * `--instructions <path>` — Replace the agent's instructions file path.
   * `--max-iterations <number>` — Update the agent's max iterations limit.
-  * `--model <model_identifier>` — Update the agent's LLM model override. Pass `--model none` to revert to the system-wide default.
+  * `--model <model_identifier>` — Update the agent's LLM model override. Pass `--model default` to revert to the system-wide default.
 * **Validation:** Errors if the agent is currently the assignee of an `in_progress` task (the user must preempt first).
 
 ### `agent remove <name> --organization <organization_name>`
@@ -108,10 +108,9 @@ Soft-delete an agent from an organization. The agent is marked as removed and ex
 Create a new task.
 * **Flags:**
   * `--organization <organization_name>` — Required. The organization this task is scoped to. Only agents in this organization can be assigned.
-  * `--assign <agent_name|user>` — Optional. Initial assignee. Defaults to `user`.
   * `--description "<text>"` or `--description-file <path>` — Optional. Sets the task description (the detailed spec). If omitted, the description defaults to the title.
-* **Action:** Sends a request to the API Server to write the task with `status='open'`. If the assignee is an agent, `queued_at` is set to `now()`, making the task visible to the Dispatcher's polling loop.
-* **Output:** Prints the new task's `id` and assignment status. Examples: `Created REAC-0012 (assigned to frontend_dev, queued for dispatch)` or `Created REAC-0012 (assigned to user)`. When the assignee is `user`, only the assignment is shown — no dispatch info.
+* **Action:** Sends a request to the API Server to write the task with `status='open'`. The task is automatically assigned to the organization's root agent (the first agent with no Boss) and `queued_at` is set to `now()`, making it immediately visible to the Dispatcher's polling loop. If no root agent exists, the command errors.
+* **Output:** Prints the new task's `id`. Example: `Created REAC-0012`.
 
 ### `task list`
 List tasks with optional filters.

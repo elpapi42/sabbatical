@@ -9,6 +9,9 @@ A continuously running process (started via `server up`, stopped via `server dow
 ### The Thin CLI (The Client)
 A lightweight terminal interface. It parses user commands, makes HTTP requests to the API Server, and formats the output. It performs zero direct database writes and does not interact with the Dispatcher directly.
 
+### The Web Application (The Second Client)
+A browser-based graphical interface served directly by the API Server as bundled static files. It provides the same capabilities as the CLI (excluding server lifecycle commands) with a persistent visual interface for monitoring tasks, exploring hierarchies, and streaming chat with The Assistant. The web app is organization-scoped — navigation is structured around a selected organization, with all views (tasks, agents, chat) filtered to that context.
+
 ## 2. The Dispatcher (Database-as-a-Queue)
 The Dispatcher is a continuous background polling loop running within the API Server that monitors the database for dispatchable tasks, claims them atomically, and manages worker threads. It replaces traditional in-memory event buses with a **database-as-a-queue** model — the SQLite database itself is the queue.
 
@@ -66,7 +69,7 @@ The API Server exposes streaming endpoints via Server-Sent Events (SSE) for two 
 2. **Run Execution Streaming** — `GET /api/runs/:id/stream` streams execution steps (reasoning, tool calls, final output) in real-time as an agent worker processes a task. The worker publishes events to an in-memory `RunEventBroadcaster` (asyncio-based pub/sub), and the SSE endpoint subscribes to the relevant channel. Multiple clients can observe the same run simultaneously. For completed runs, the endpoint replays stored steps as a burst.
 
 ## 5. LLM Provider
-The first release exclusively supports the **OpenRouter API** as the LLM provider. All LLM calls — from agent worker threads and The Assistant — are routed through OpenRouter. Model selection is configured globally via the configuration file.
+The first release exclusively supports the **OpenRouter API** as the LLM provider. All LLM calls — from agent worker threads and The Assistant — are routed through OpenRouter. The system uses **Google's Agent Development Kit (ADK)** with the `LiteLlm` model adapter, which prefixes the configured model identifier with `openrouter/` to route through OpenRouter's unified API. Model selection is configured globally via the configuration file (default: `minimax/minimax-m2.7` for both agents and The Assistant, overridable per agent).
 
 ## 6. Configuration
 Global configuration is stored in the **`~/.sabbatical/`** directory. This includes:

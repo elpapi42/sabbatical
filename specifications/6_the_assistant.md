@@ -3,7 +3,7 @@
 ## 1. Core Vision & Operational Boundaries
 * **The Conversational Copilot:** The Assistant's primary purpose is to help the user plan work, act as a sounding board for design decisions, translate plans into meaningful tasks, and assign those tasks intelligently to the right agents.
 * **Strict Non-Execution:** The Assistant never executes technical work. It is entirely distinct from the stateless Agents, which are the autonomous workers defined by a specific System Prompt and a shared, static tool set.
-* **Runs on the API Server:** The Assistant runs within the API Server process and is exposed to the CLI via a dedicated streaming endpoint. All state modifications requested by The Assistant are executed by the API Server through the same state store operations as the manual CLI commands.
+* **Runs on the API Server:** The Assistant runs within the API Server process and is exposed to the CLI and Web UI via a dedicated streaming endpoint. All state modifications requested by The Assistant are executed by the API Server through the same state store operations as the manual CLI commands.
 
 ---
 
@@ -37,8 +37,8 @@ While users have full manual control via CLI commands to create organizations an
 ---
 
 ## 5. Communication Protocol
-* **Streaming Endpoint:** The API Server exposes a dedicated SSE (Server-Sent Events) streaming endpoint for The Assistant. The CLI connects to this endpoint to pipe live token generation to the terminal.
-* **LLM Provider:** The Assistant's LLM calls are routed through the OpenRouter API, using the model configured in `~/.sabbatical/`.
+* **Streaming Endpoint:** The API Server exposes a dedicated SSE (Server-Sent Events) streaming endpoint for The Assistant. The CLI and Web UI connect to this endpoint to pipe live token generation to the terminal or browser.
+* **LLM Provider:** The Assistant's LLM calls are routed through the OpenRouter API via Google's ADK `LiteLlm` adapter, using the `assistant_model` configured in `~/.sabbatical/config.toml` (default: `minimax/minimax-m2.7`). The model identifier is automatically prefixed with `openrouter/` at runtime.
 
 ---
 

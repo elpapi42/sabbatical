@@ -11,7 +11,7 @@ The CLI excels at rapid, scriptable operations but falls short for:
 - **Exploration**: Navigating organizational hierarchies, reading task timelines, and drilling into run execution steps.
 - **Rich Interaction**: Composing comments with @-mention autocomplete, streaming chat with The Assistant, and inspecting deeply nested data.
 
-The web app provides a persistent, visual, always-open dashboard that makes the system's state immediately legible.
+The web app provides a persistent, visual, always-open interface that makes the system's state immediately legible.
 
 ### 1.3 Relationship to CLI
 The web app is **not a replacement** for the CLI. It is a complementary view. Both clients:
@@ -52,112 +52,82 @@ The web app covers all public API endpoints except `POST /api/shutdown`. Every C
 
 ## 3. Application Structure
 
-### 3.1 Page Map & URL Routing
+### 3.1 Organization-Scoped Architecture
+
+The web app is **organization-scoped** — all views are accessed within the context of a selected organization. There is no global dashboard or cross-organization task list. This reflects the system's design principle that organizations are fully isolated.
+
+### 3.2 Page Map & URL Routing
 
 | URL Pattern | View | Description |
 |---|---|---|
-| `/` | Dashboard | System-wide status, task counts, cost, active workers. |
-| `/organizations` | Organization List | All organizations with cost and agent count. |
-| `/organizations/:name` | Organization Detail | Agent hierarchy tree, cost breakdown, task summary. |
-| `/organizations/:name/agents/:agentName` | Agent Detail | Instructions, subordinates, cost, model. |
-| `/tasks` | Task List | Filterable/sortable task table across all organizations. |
-| `/tasks/:id` | Task Detail | Full timeline (comments + run summaries), comment input, action buttons. |
-| `/tasks/:id/runs/:runId` | Run Detail | Execution steps with tool calls, reasoning, final output. |
-| `/chat` | Session List | All chat sessions with organization scope. |
-| `/chat/:id` | Chat Interface | Full streaming chat with The Assistant. |
+| `/` | Org Redirect | Redirects to the first organization's overview page. If no organizations exist, shows a welcome screen with a "Create Organization" CTA. |
+| `/org/:name` | Organization Overview | Agent hierarchy tree, org info, edit/delete actions. |
+| `/org/:name/agents/:agentName` | Agent Detail | Instructions, subordinates, cost, model. |
+| `/org/:name/tasks` | Task List | Filterable task table scoped to the organization. |
+| `/org/:name/tasks/:id` | Task Detail | Full timeline (comments + run summaries), comment input, action buttons. |
+| `/org/:name/tasks/:id/runs/:runId` | Run Detail | Execution steps with tool calls, reasoning, final output. |
+| `/org/:name/chat` | Session List | Chat sessions scoped to the organization. |
+| `/org/:name/chat/:id` | Chat Interface | Full streaming chat with The Assistant. |
 
-### 3.2 Navigation Layout
+### 3.3 Navigation Layout
 
-The application uses a **fixed left sidebar + main content area** layout.
+The application uses a **dual-sidebar + main content area** layout: a narrow **Organization Rail** on the far left for switching between organizations, and a wider **Organization Sidebar** for navigating within the selected organization.
 
 ```
-┌──────────┬───────────────────────────────────────────┐
-│          │  Breadcrumbs                               │
-│  Logo    ├───────────────────────────────────────────┤
-│          │                                           │
-│ Dashboard│                                           │
-│ Orgs     │         Main Content Area                 │
-│ Tasks    │                                           │
-│ Chat     │                                           │
-│          │                                           │
-│          │                                           │
-│──────────│                                           │
-│ Status   │                                           │
-│ bar      │                                           │
-└──────────┴───────────────────────────────────────────┘
+┌────┬──────────┬───────────────────────────────────────┐
+│    │          │  Breadcrumbs                           │
+│ O  │  Org     ├───────────────────────────────────────┤
+│ r  │  Name    │                                       │
+│ g  │          │                                       │
+│    │ Overview │         Main Content Area             │
+│ R  │ Agents ▾ │                                       │
+│ a  │  ├ dev   │                                       │
+│ i  │  └ tester│                                       │
+│ l  │ Tasks    │                                       │
+│    │ Chat     │                                       │
+│    │──────────│                                       │
+│ +  │ Agents: 3│                                       │
+│    │ Cost: $x │                                       │
+└────┴──────────┴───────────────────────────────────────┘
 ```
 
-**Sidebar contents (top to bottom):**
-1. **Logo/wordmark**: "Sabbatical" text. Links to `/`.
-2. **Navigation links**: Dashboard, Organizations, Tasks, Chat. Active link is visually highlighted.
-3. **Status footer** (bottom of sidebar): Compact live indicator showing active workers count (e.g., "2/4 workers") and total system cost (e.g., "$12.47"). Updated via the same polling mechanism as the dashboard. This gives persistent cost/activity awareness from any page.
+**Organization Rail** (far left, 56px wide):
+- A vertical strip of circular organization avatars (first letter of org name, deterministic color from name hash).
+- Active organization shows a left-edge indicator bar and ring highlight.
+- A "+" button at the bottom opens the Create Organization dialog.
+- Clicking an organization avatar navigates to `/org/:name`.
 
-**Breadcrumbs**: Displayed at the top of the main content area, reflecting the current navigation path (e.g., `Organizations > react_app > frontend_dev`).
+**Organization Sidebar** (224px wide, collapsible):
+1. **Org header**: Organization name (link to overview), settings icon.
+2. **Navigation links**: Overview, Agents (collapsible list showing individual agents), Tasks, Chat. Active link is visually highlighted.
+3. **Footer**: Agent count and total cost for the organization.
 
-### 3.3 Responsive Behavior
-- **Desktop (1024px+)**: Sidebar is permanently visible. Full layout as described above.
-- **Tablet (768px–1023px)**: Sidebar collapses to icons only. Expands on hover or hamburger toggle. Main content fills the screen.
-- **Below 768px**: Not a primary target. Sidebar becomes a slide-out drawer triggered by a hamburger icon.
+**Breadcrumbs**: Displayed at the top of the main content area via a `BreadcrumbBar` component, reflecting the current navigation path (e.g., `react_app > Tasks > REAC-0003`). Single-item breadcrumbs render as page titles.
+
+### 3.4 Responsive Behavior
+- **Desktop (1024px+)**: Both the Organization Rail and Organization Sidebar are permanently visible.
+- **Mobile**: The Organization Sidebar becomes a slide-out overlay drawer triggered by a hamburger icon, positioned to the right of the Organization Rail. A backdrop overlay dismisses it on click.
 
 ---
 
-## 4. Dashboard View
+## 4. Root Route & Empty State
 
 **Route**: `/`
-**API**: `GET /api/status`, `GET /api/organizations`, `GET /api/tasks?status=in_progress`
-**Polling**: Every 3 seconds.
 
-### 4.1 Layout
-
-The dashboard is a single-page overview with four sections:
-
-**Section A: Server Status Bar**
-A horizontal bar at the top displaying:
-- Server status indicator (green dot + "Running").
-- Active workers: `{active_workers} / {max_concurrency}` with a small progress bar.
-- Total system cost: `${total_cost}` formatted to 2 decimal places.
-- Total tokens: `{consumed_input_tokens + consumed_output_tokens}` formatted with `k` or `M` suffix.
-
-**Section B: Task Status Cards**
-Five cards in a horizontal row, one per status (`open`, `in_progress`, `failed`, `done`, `canceled`). Each card shows the count and a status-appropriate color/icon. The `failed` card uses a warning color (amber/red) when count > 0. Each card is clickable and navigates to `/tasks?status={status}`.
-
-**Section C: Organization Summary Table**
-A compact table listing all organizations (fetched from `GET /api/organizations`). Columns: Name, Agents, Cost. Each row links to `/organizations/:name`. Sorted by cost descending (most expensive first).
-
-**Section D: Active Tasks Feed**
-A live feed of in-progress tasks (fetched from `GET /api/tasks?status=in_progress`). Each entry shows: task ID, title, assignee (agent), organization, and elapsed time (computed from `current_run_elapsed_seconds`). Elapsed time updates every second via a client-side timer seeded from the API value. Each entry links to `/tasks/:id`.
-
-### 4.2 Empty State
-When no organizations exist, the dashboard shows a centered call-to-action: "No organizations yet. Create one to get started." with a button that opens the Create Organization dialog.
+The root route does not render its own page. Instead, it automatically redirects to the first organization's overview page (`/org/:name`). If no organizations exist, it displays a centered welcome screen: "Welcome to Sabbatical — Create your first organization to start orchestrating AI agents." with a "Create Organization" button that opens the organization creation dialog. On successful creation, the user is navigated to the new organization's overview.
 
 ---
 
 ## 5. Organization Views
 
-### 5.1 Organization List
+### 5.1 Organization Switching
 
-**Route**: `/organizations`
-**API**: `GET /api/organizations`
-**Polling**: Every 5 seconds.
+Organization switching is handled by the **Organization Rail** (Section 3.3). There is no dedicated Organization List page — organizations are always visible in the rail, and switching between them is a single click. Creating a new organization is done via the "+" button in the rail.
 
-A table with columns:
+### 5.2 Organization Overview (Detail)
 
-| Column | Source |
-|---|---|
-| Name | `name` (link to detail) |
-| Description | `description` (truncated to 80 chars) |
-| Workspace | `workspace_path` (monospace, truncated with tooltip) |
-| Agents | `agent_count` |
-| Cost | `$total_cost` |
-
-**Actions**:
-- **"New Organization"** button (top-right) opens a creation dialog.
-- Each row has a kebab menu (three dots) with: Edit, Delete.
-
-### 5.2 Organization Detail
-
-**Route**: `/organizations/:name`
-**API**: `GET /api/organizations/:name` (returns agent hierarchy tree), `GET /api/tasks?organization=:name`
+**Route**: `/org/:name`
+**API**: `GET /api/organizations/:name` (returns agent hierarchy tree)
 **Polling**: Every 5 seconds.
 
 **Layout** (two-column on desktop):
@@ -173,8 +143,8 @@ Tree lines use CSS borders (`border-left` + `border-bottom`) connecting parent t
 
 **Right column (~40%): Organization Info + Task Summary**
 - **Info card**: Name, description, workspace path, total cost, total tokens.
-- **Task status breakdown**: Five small status badges with counts (same as dashboard cards but scoped to this org). Each is clickable and navigates to `/tasks?organization=:name&status={status}`.
-- **Recent tasks**: A compact list of the 5 most recent tasks in this organization, each linking to `/tasks/:id`.
+- **Task status breakdown**: Five small status badges with counts scoped to this org. Each is clickable and navigates to `/org/:name/tasks?status={status}`.
+- **Recent tasks**: A compact list of the 5 most recent tasks in this organization, each linking to `/org/:name/tasks/:id`.
 
 **Actions**:
 - **"Add Agent"** button above the hierarchy tree opens the agent creation form.
@@ -191,7 +161,7 @@ A modal dialog with fields:
 | Workspace Path | Text input | Required, must be an absolute path. |
 | Description | Textarea | Optional. |
 
-On submit, `POST /api/organizations`. On success, navigate to `/organizations/:name`. On error (409 duplicate, 422 validation), display inline error message below the relevant field.
+On submit, `POST /api/organizations`. On success, navigate to `/org/:name`. On error (409 duplicate, 422 validation), display inline error message below the relevant field.
 
 ### 5.4 Edit Organization Dialog
 
@@ -203,7 +173,7 @@ Pre-populated modal with workspace_path and description fields. Name is displaye
 
 ### 6.1 Agent Detail
 
-**Route**: `/organizations/:name/agents/:agentName`
+**Route**: `/org/:name/agents/:agentName`
 **API**: `GET /api/organizations/:org/agents/:name`
 **Polling**: Every 10 seconds (agent data changes infrequently).
 
@@ -251,16 +221,15 @@ Pre-populated modal with same fields as Add Agent (except Name, which is read-on
 
 ### 7.1 Task List
 
-**Route**: `/tasks`
-**API**: `GET /api/tasks` with query parameters.
+**Route**: `/org/:name/tasks`
+**API**: `GET /api/tasks?organization=:name` with additional query parameters.
 **Polling**: Every 3 seconds.
 
-**Filters** (displayed as a horizontal bar above the table):
-- **Organization**: Dropdown populated from `GET /api/organizations` (includes "All" option).
+The task list is always scoped to the current organization (from the URL parameter). Additional filters are displayed as a horizontal bar above the table:
 - **Status**: Multi-select pills for `open`, `in_progress`, `failed`, `done`, `canceled`. All selected by default except `canceled`.
-- **Assignee**: Text input with autocomplete (searches across agents in the selected organization, plus `user`).
+- **Assignee**: Text input with autocomplete (searches across agents in the organization, plus `user`).
 
-Filters are reflected in URL query parameters (`/tasks?organization=react_app&status=open,in_progress`) so that links to filtered views are shareable and bookmarkable.
+Filters are reflected in URL query parameters (`/org/react_app/tasks?status=open,in_progress`) so that links to filtered views are shareable and bookmarkable.
 
 **Table columns**:
 
@@ -270,9 +239,7 @@ Filters are reflected in URL query parameters (`/tasks?organization=react_app&st
 | Title | `title` | Truncated to 60 chars with tooltip. |
 | Status | `status` | Color-coded badge (see Section 11). |
 | Assignee | `assignee` | Link to agent detail if not "user". |
-| Organization | `organization` | Link to org detail. |
-| Cost | `$total_cost` | |
-| Elapsed / Duration | `current_run_elapsed_seconds` or `total_duration_seconds` | For `in_progress` tasks, a live-updating timer. For completed tasks, total duration. |
+| Cost | `$total_cost` | For `in_progress` tasks, elapsed time of current run is appended (e.g., `$0.04 (2m 30s)`). For terminal tasks, total duration is appended. |
 | Created | `created_at` | Relative time (e.g., "2h ago") with absolute tooltip. |
 
 Default sort: `in_progress` first, then `open`, then `failed`, then `done`, then `canceled`. Within each group, most recent first.
@@ -282,7 +249,7 @@ Default sort: `in_progress` first, then `open`, then `failed`, then `done`, then
 
 ### 7.2 Task Detail
 
-**Route**: `/tasks/:id`
+**Route**: `/org/:name/tasks/:id`
 **API**: `GET /api/tasks/:id` (returns full timeline).
 **Polling**: Every 3 seconds when task is `open` or `in_progress`. Every 10 seconds for `done`, `failed`, `canceled`.
 
@@ -368,11 +335,12 @@ A modal dialog with fields:
 | Field | Input Type | Validation |
 |---|---|---|
 | Title | Text input | Required. |
-| Organization | Dropdown (from `GET /api/organizations`) | Required. |
-| Assignee | Dropdown (populated from agents in selected org + "user") | Defaults to "user". Updates when organization selection changes. |
+| Organization | Dropdown (from `GET /api/organizations`) or locked display | Required. When opened from an org-scoped view, the organization is pre-filled and locked (displayed as read-only text). |
 | Description | Textarea (tall, supports Markdown) | Optional. Defaults to title if omitted by the API. |
 
-On submit, `POST /api/tasks`. On success, navigate to `/tasks/:id`.
+The task is automatically assigned to the organization's root agent by the API — there is no assignee field.
+
+On submit, `POST /api/tasks`. On success, navigate to `/org/:name/tasks/:id`.
 
 ---
 
@@ -394,7 +362,7 @@ Runs are surfaced inline in the task timeline as run summary cards (Section 7.2)
 
 ### 8.2 Run Detail
 
-**Route**: `/tasks/:id/runs/:runId`
+**Route**: `/org/:name/tasks/:id/runs/:runId`
 **API**: `GET /api/runs/:runId`
 **Polling**: Every 3 seconds if run status is `running`. No polling for terminal statuses.
 
@@ -439,8 +407,8 @@ When the Run Detail page loads a run with status `running`, it automatically con
 
 ### 9.1 Session List
 
-**Route**: `/chat`
-**API**: `GET /api/sessions`
+**Route**: `/org/:name/chat`
+**API**: `GET /api/sessions?organization_scope=:name`
 **Polling**: Every 10 seconds.
 
 A list of session cards (not a table), displayed as a vertical stack. Each card shows:
@@ -449,14 +417,14 @@ A list of session cards (not a table), displayed as a vertical stack. Each card 
 - Cost.
 - Created timestamp (relative).
 
-Clicking a card navigates to `/chat/:id`.
+Clicking a card navigates to `/org/:name/chat/:id`.
 
 **Actions**:
-- **"New Chat"** button opens a small dialog to optionally select an organization scope, then creates a session via `POST /api/sessions` and navigates to `/chat/:id`.
+- **"New Chat"** button creates a session scoped to the current organization via `POST /api/sessions` and navigates to `/org/:name/chat/:id`. No scope selection dialog is shown — the session inherits the organization context from the current view.
 
 ### 9.2 Chat Interface
 
-**Route**: `/chat/:id`
+**Route**: `/org/:name/chat/:id`
 **API**: `GET /api/sessions/:id` (initial load), `POST /api/sessions/:id/messages` (send, SSE stream).
 
 The chat interface is a full-height, single-column view optimized for conversation.
@@ -515,19 +483,15 @@ The web app uses **polling via TanStack Query's `refetchInterval`** for all live
 
 | View / Data | Interval | Rationale |
 |---|---|---|
-| Dashboard status (`GET /api/status`) | 3s | Core system health must feel live. |
-| Dashboard org table (`GET /api/organizations`) | 3s | Cost accumulation is continuous. |
-| Dashboard active tasks (`GET /api/tasks?status=in_progress`) | 3s | Active work changes rapidly. |
+| Server status (`GET /api/status`) | 3s | Used by the layout to detect server availability. |
 | Task list | 3s | Status transitions happen frequently during active work. |
 | Task detail (open / in_progress) | 3s | Timeline grows during active execution. |
 | Task detail (done / failed / canceled) | 10s | Rarely changes; mostly for detecting reopens. |
-| Organization list | 5s | Moderate change frequency. |
 | Organization detail | 5s | Agent additions are infrequent. |
 | Agent detail | 10s | Agent profiles rarely change. |
 | Run detail (running) | 3s | Steps accumulate during execution. |
 | Run detail (terminal) | None | Terminal runs never change. |
 | Session list | 10s | Low urgency. |
-| Sidebar status footer | 3s | Shares the dashboard status query (same cache key). |
 
 ### 10.2 Polling Behavior
 - **Tab visibility**: Polling is paused when the browser tab is not visible. TanStack Query's `refetchOnWindowFocus` handles revalidation on return.
@@ -603,7 +567,6 @@ A centered illustration/icon with explanatory text and a primary action button. 
 - **Toast notifications**: Slide in from top-right, auto-dismiss after 5 seconds, manually dismissable.
 
 ### 12.5 Keyboard Shortcuts
-- `/` — Focus the search/filter input on the current page (if applicable).
 - `n` — Open the "New" dialog for the current context (New Task on tasks page, New Chat on chat page).
 - `Esc` — Close any open modal/dialog.
 
@@ -677,10 +640,7 @@ web/
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
-├── tailwind.config.ts
 ├── index.html
-├── public/
-│   └── favicon.svg
 └── src/
     ├── main.tsx
     ├── App.tsx
@@ -691,9 +651,11 @@ web/
     │   └── mutations.ts             # TanStack Query mutation hooks
     ├── components/
     │   ├── layout/
-    │   │   ├── Sidebar.tsx
-    │   │   ├── Breadcrumbs.tsx
-    │   │   └── AppLayout.tsx
+    │   │   ├── AppLayout.tsx        # Root layout with OrgRail + OrgSidebar + content
+    │   │   ├── OrgRail.tsx          # Narrow left rail for org switching
+    │   │   ├── OrgSidebar.tsx       # Org-scoped navigation sidebar
+    │   │   ├── BreadcrumbBar.tsx    # Dynamic breadcrumbs / page titles
+    │   │   └── OrgRedirect.tsx      # Root "/" redirect to first org
     │   ├── shared/
     │   │   ├── StatusBadge.tsx
     │   │   ├── CostDisplay.tsx
@@ -702,12 +664,11 @@ web/
     │   │   ├── MarkdownRenderer.tsx
     │   │   ├── ConfirmDialog.tsx
     │   │   ├── EmptyState.tsx
+    │   │   ├── PageSkeleton.tsx
     │   │   └── Toast.tsx
     │   ├── organizations/
-    │   │   ├── OrgList.tsx
-    │   │   ├── OrgDetail.tsx
-    │   │   ├── OrgForm.tsx
-    │   │   └── AgentTree.tsx
+    │   │   ├── OrgForm.tsx          # Create/edit organization dialog
+    │   │   └── AgentTree.tsx        # Recursive agent hierarchy tree
     │   ├── agents/
     │   │   ├── AgentDetail.tsx
     │   │   └── AgentForm.tsx
@@ -731,10 +692,11 @@ web/
     │       ├── ChatInterface.tsx
     │       ├── ChatMessage.tsx
     │       └── ChatInput.tsx
+    ├── context/
+    │   ├── OrgContext.tsx            # Current org data provider
+    │   └── SidebarContext.tsx        # Sidebar open/close state
     ├── pages/
-    │   ├── DashboardPage.tsx
-    │   ├── OrganizationsPage.tsx
-    │   ├── OrganizationDetailPage.tsx
+    │   ├── OrgOverviewPage.tsx
     │   ├── AgentDetailPage.tsx
     │   ├── TasksPage.tsx
     │   ├── TaskDetailPage.tsx
@@ -744,7 +706,9 @@ web/
     └── lib/
         ├── format.ts                # Cost, token, time formatting utilities
         ├── constants.ts             # Polling intervals, color mappings
-        └── hooks.ts                 # Shared custom hooks (useElapsedTimer, etc.)
+        ├── hooks.ts                 # Shared custom hooks (useElapsedTimer, etc.)
+        ├── orgLinks.ts              # Helper for generating org-scoped URLs
+        └── useRunStream.ts          # SSE hook for real-time run step streaming
 ```
 
 ---
@@ -752,7 +716,7 @@ web/
 ## 14. Edge Cases & Constraints
 
 ### 14.1 Server Unavailable
-When the API server is not running, the web app shows a full-page "Server Offline" state with instructions to run `sabbatical server up`. All polling stops. A background health check (`GET /api/status`) runs every 5 seconds and automatically transitions to the dashboard when the server comes online.
+When the API server is not running (detected after 3 consecutive failed polls to `GET /api/status`), the layout displays a persistent red banner at the top of the main content area: "Unable to reach the Sabbatical server. Is it running?" with a `sabbatical server up` command hint. Polling continues, and the banner disappears automatically when connectivity is restored.
 
 ### 14.2 Stale Data After Action
 After any mutation (create, update, delete, task action), the relevant TanStack Query caches are invalidated to trigger an immediate refetch. For example, after `POST /api/tasks/:id/done`, both the task detail query and the task list query are invalidated.
@@ -761,7 +725,7 @@ After any mutation (create, update, delete, task action), the relevant TanStack 
 Since both clients are stateless REST consumers, there are no conflicts. The polling mechanism ensures the web app picks up changes made via the CLI within the polling interval (worst case: 3 seconds for actively-polled views).
 
 ### 14.4 Long Task Timelines
-For tasks with many comments and runs (50+ timeline entries), the timeline uses virtualized (windowed) rendering to maintain scroll performance. Only visible entries are rendered in the DOM.
+For tasks with many comments and runs, the timeline renders all entries directly. No virtualization is applied — timelines are expected to remain manageable in size for V1.
 
 ### 14.5 Large Execution Steps
 Run execution steps with very long tool outputs (e.g., large file writes, verbose shell output) are truncated by default (500 characters) with an explicit "Show full output" toggle, matching the CLI's `--full` behavior.

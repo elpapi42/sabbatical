@@ -12,7 +12,7 @@ All request and response bodies are `application/json` unless otherwise noted.
 All errors return an appropriate HTTP status code with a plain message:
 ```json
 {
-  "detail": "Agent 'frontend_dev' already exists in organization 'react_app'."
+  "message": "Agent 'frontend_dev' already exists in organization 'react_app'."
 }
 ```
 
@@ -372,7 +372,6 @@ Create a new task.
 |---|---|---|---|
 | `title` | string | yes | Brief description of the work. |
 | `organization` | string | yes | Organization this task is scoped to. |
-| `assignee` | string | no | Initial assignee — an agent name or `"user"`. Defaults to `"user"`. |
 | `description` | string | no | The task spec / detailed description. If omitted, defaults to the `title`. |
 
 **Response `201`**
@@ -381,12 +380,13 @@ Returns the full TaskDetail response (same shape as `GET /api/tasks/:id`), inclu
 
 The task ID is always `<ORG_ACRONYM>-<NUMBER>` where the number portion is a sequential, zero-padded integer (e.g., `REAC-0001`, `REAC-0002`, `REAC-0003`).
 
-If `assignee` is an agent, `queued_at` is set to `now()`, making the task visible to the Dispatcher's polling loop. If `assignee` is `user`, `queued_at` is `null`.
+The task is automatically assigned to the organization's **root agent** (the first agent with `boss IS NULL` and `is_removed = 0`). `queued_at` is set to `now()`, making the task immediately visible to the Dispatcher's polling loop.
 
 **Errors**
 | Status | Condition |
 |---|---|
-| 404 | Organization does not exist, or assignee references a non-existent agent in the organization. |
+| 400 | No root agent found in the organization. |
+| 404 | Organization does not exist. |
 | 422 | Missing `title` or `organization`. |
 
 ---
@@ -414,13 +414,15 @@ List tasks with optional filters.
       "consumed_input_tokens": 15200,
       "consumed_output_tokens": 4100,
       "total_cost": 0.32,
-      "created_at": "2026-03-22T14:30:00Z"
+      "created_at": "2026-03-22T14:30:00Z",
+      "current_run_elapsed_seconds": null,
+      "total_duration_seconds": null
     }
   ]
 }
 ```
 
-Token and cost figures are computed from all Runs under this task. For `in_progress` tasks, `current_run_elapsed_seconds` is included (computed from the active Run's `started_at`); it is `null` for other statuses.
+Token and cost figures are computed from all Runs under this task. For `in_progress` tasks, `current_run_elapsed_seconds` is included (computed from the active Run's `started_at`); it is `null` for other statuses. `total_duration_seconds` is the sum of all completed Run durations for the task; `null` if no runs have completed.
 
 ---
 
@@ -500,6 +502,7 @@ Append a comment to a task as the human user.
 ```json
 {
   "comment": {
+    "type": "comment",
     "author": "user",
     "body": "@frontend_dev Please also add a system preference detector.",
     "created_at": "2026-03-22T15:00:00Z"
@@ -507,10 +510,13 @@ Append a comment to a task as the human user.
   "task": {
     "id": "REAC-0003",
     "status": "open",
-    "assignee": "frontend_dev"
+    "assignee": "frontend_dev",
+    "preempted_run": null
   }
 }
 ```
+
+The `task.preempted_run` field is always `null` for comment responses (it is only populated on preempt/cancel endpoints).
 
 **Errors**
 | Status | Condition |
@@ -683,6 +689,7 @@ List all runs for a task.
       "status": "success",
       "duration_seconds": 45,
       "total_cost": 0.04,
+      "model_used": "minimax/minimax-m2.7",
       "started_at": "2026-03-22T14:30:02Z",
       "ended_at": "2026-03-22T14:30:47Z"
     }

@@ -1,7 +1,7 @@
 # Sabbatical — Product Vision & System Summary
 
 ## 1. What is Sabbatical?
-Sabbatical is a developer-centric CLI tool for orchestrating specialized organizations of AI agents. It operates on a Client-Server architecture running locally on the developer's machine: a centralized, always-on **Local API Server** handles orchestration, state, and agent execution, while a **Thin CLI** acts as the human interface over HTTP. A conversational copilot ("**The Assistant**") helps users plan work, make design decisions, break down projects into tasks, and optionally bootstrap organizations without touching the keyboard-heavy manual CLI.
+Sabbatical is a developer-centric tool for orchestrating specialized organizations of AI agents. It operates on a Client-Server architecture running locally on the developer's machine: a centralized, always-on **Local API Server** handles orchestration, state, and agent execution, while a **Thin CLI** and a **Web Application** act as human interfaces over HTTP. A conversational copilot ("**The Assistant**") helps users plan work, make design decisions, break down projects into tasks, and optionally bootstrap organizations.
 
 ## 2. Core Concepts
 
@@ -28,19 +28,20 @@ Sabbatical is a developer-centric CLI tool for orchestrating specialized organiz
 * **Agent Soft-Delete** — Agents are never hard-deleted individually. Removing an agent marks it as removed, preserving its record for historical reference. Subordinates are promoted to root.
 * **Naming Convention** — Organization and agent names must be `snake_case`.
 * **Cost from Runs** — The Run is the sole unit of cost. All aggregate cost and token figures (organization, agent, task) are computed at query time by summing across relevant Runs, not stored redundantly.
-* **OpenRouter Only (V1)** — All LLM calls route through the OpenRouter API.
-* **Configuration** — Global config lives in `~/.sabbatical/` (API keys, model selection, concurrency limits, server settings).
+* **Auto-Assignment to Root Agent** — When a task is created, it is automatically assigned to the organization's root agent (the agent with no Boss) and queued for dispatch. There is no option to create a task assigned to `user` — all tasks immediately enter the dispatch queue.
+* **OpenRouter Only (V1)** — All LLM calls route through the OpenRouter API (via `LiteLlm` from Google's Agent Development Kit for framework integration).
+* **Configuration** — Global config lives in `~/.sabbatical/config.toml` (API keys, model selection, concurrency limits, server settings).
 
 ## 4. Reading Guide
 
 | Spec | Answers |
 |---|---|
-| [Architecture](architecture.md) | How is the system built? Components, protocols, infrastructure. |
-| [Data Model](data_model.md) | What are the entities, fields, and relationships? |
-| [Task Lifecycle](task_lifecycle.md) | How do tasks flow? State machine, handoffs, routing, invariants. |
-| [Context Management](context_management.md) | What do agents see? Prompt caching strategy. |
-| [The Assistant](the_assistant.md) | What does the conversational copilot do? |
-| [CLI Commands](cli_commands.md) | How do I use it? Complete command reference. |
+| [Architecture](2_architecture.md) | How is the system built? Components, protocols, infrastructure. |
+| [Data Model](3_data_model.md) | What are the entities, fields, and relationships? |
+| [Task Lifecycle](4_task_lifecycle.md) | How do tasks flow? State machine, handoffs, routing, invariants. |
+| [Context Management](5_context_management.md) | What do agents see? Prompt caching strategy. |
+| [The Assistant](6_the_assistant.md) | What does the conversational copilot do? |
+| [CLI Commands](7_cli_commands.md) | How do I use it? Complete command reference. |
 | [API Endpoints](8_api_endpoints.md) | What are the HTTP endpoints? Request/response formats. |
-| [Implementation](9_implementation.md) | How is it built? Tech stack, code structure, database schema. |
-| [System Prompts](10_prompts.md) | What do agents and the Assistant see? Exact prompt definitions. |
+| [System Prompts](9_prompts.md) | What do agents and the Assistant see? Exact prompt definitions. |
+| [Web Application](10_web_app.md) | How does the browser-based UI work? Pages, components, real-time updates. |

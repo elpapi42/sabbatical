@@ -70,7 +70,7 @@ The fundamental unit of work.
 
 ### The `queued_at` Field
 The `queued_at` timestamp isolates the task's queue position from its creation time (`created_at`) and its comment thread activity. It is set to `now()` strictly during the following transitions:
-* **Task Creation** — When a new task is created and the assignee is an agent (not `user`).
+* **Task Creation** — When a new task is created (tasks are always auto-assigned to the organization's root agent).
 * **Agent Handoffs** — When an executing agent finishes and drops a valid `@agent_name` tag, returning the task to `open`.
 * **Boss Escalation** — When an agent finishes without a tag and the system escalates to their Boss, returning the task to `open`.
 * **Human Delegation** — When a user comments with an `@agent_name` tag, updating the assignee and setting `status='open'`.

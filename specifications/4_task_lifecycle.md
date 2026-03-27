@@ -30,7 +30,7 @@ A Run (an individual agent execution) must exist in one of the following four st
 
 ### A. Initialization & Execution
 * **[Creation] → `open`**
-  * *Action:* A new task is saved to the state store via the API Server with `status='open'`. If the assignee is an agent, `queued_at` is set to `now()`, making the task visible to the Dispatcher's polling loop. If the assignee is `user`, `queued_at` remains `null`.
+  * *Action:* A new task is saved to the state store via the API Server with `status='open'`. The task is automatically assigned to the organization's **root agent** (the first agent with no Boss), and `queued_at` is set to `now()`, making the task immediately visible to the Dispatcher's polling loop. If no root agent exists in the organization, creation fails with an error.
 * **`open` → `in_progress`**
   * *Trigger:* The Dispatcher's polling loop detects an eligible task (`status='open'`, `assignee` is an agent, ordered by `queued_at` ASC) and capacity is available.
   * *Action:* The Dispatcher atomically updates the status to `in_progress` (locking the task), creates a new `Run` record in the database, and spins up the worker thread for the specified agent. Execution steps are logged to the Run.
