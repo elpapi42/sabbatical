@@ -34,7 +34,7 @@ async def generate_description(
         )
         return None
 
-    result = {"description": None}
+    result: dict[str, str | None] = {"description": None}
 
     def set_description(description: str) -> str:
         """Set the agent's detailed role description (2-4 sentences).
