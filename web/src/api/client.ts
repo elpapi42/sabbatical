@@ -17,10 +17,6 @@ import type {
   CommentResult,
   RunSummary,
   RunDetail,
-  SessionCreate,
-  SessionSummary,
-  SessionDetail,
-  MessageCreate,
   TaskListParams,
 } from "./types";
 
@@ -166,34 +162,5 @@ export const getTaskRuns = (taskId: string) =>
   apiFetch<{ runs: RunSummary[] }>(`/tasks/${taskId}/runs`).then((r) => r.runs);
 
 export const getRun = (id: string) => apiFetch<RunDetail>(`/runs/${id}`);
-
-// Sessions
-export const getSessions = (orgScope?: string) => {
-  const qs = orgScope
-    ? `?organization_scope=${encodeURIComponent(orgScope)}`
-    : "";
-  return apiFetch<{ sessions: SessionSummary[] }>(`/sessions${qs}`).then(
-    (r) => r.sessions,
-  );
-};
-
-export const getSession = (id: string) =>
-  apiFetch<SessionDetail>(`/sessions/${id}`);
-
-export const createSession = (data: SessionCreate) =>
-  apiFetch<SessionDetail>("/sessions", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-
-export const sendMessage = (
-  sessionId: string,
-  data: MessageCreate,
-): Promise<Response> =>
-  fetch(`${API_BASE}/sessions/${sessionId}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
 
 export { ApiRequestError };

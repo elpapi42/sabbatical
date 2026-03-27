@@ -13,7 +13,6 @@ import {
   reopenTask,
   retryTask,
   cancelTask,
-  createSession,
 } from "./client";
 import type {
   OrganizationCreate,
@@ -22,7 +21,6 @@ import type {
   AgentUpdate,
   TaskCreate,
   CommentCreate,
-  SessionCreate,
 } from "./types";
 
 // Organizations
@@ -168,11 +166,3 @@ export function useCancelTask() {
   });
 }
 
-// Sessions
-export function useCreateSession() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: SessionCreate) => createSession(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sessions"] }),
-  });
-}

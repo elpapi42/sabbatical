@@ -6,9 +6,6 @@ import AgentDetailPage from "@/pages/AgentDetailPage";
 import TasksPage from "@/pages/TasksPage";
 import TaskDetailPage from "@/pages/TaskDetailPage";
 import RunDetailPage from "@/pages/RunDetailPage";
-import ChatListPage from "@/pages/ChatListPage";
-import ChatPage from "@/pages/ChatPage";
-
 export default function App() {
   return (
     <Routes>
@@ -22,8 +19,6 @@ export default function App() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="tasks/:id/runs/:runId" element={<RunDetailPage />} />
-        <Route path="chat" element={<ChatListPage />} />
-        <Route path="chat/:id" element={<ChatPage />} />
       </Route>
     </Routes>
   );

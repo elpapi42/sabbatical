@@ -9,8 +9,6 @@ import {
   getTask,
   getTaskRuns,
   getRun,
-  getSessions,
-  getSession,
 } from "./client";
 import type { TaskListParams } from "./types";
 import { POLL_FAST, POLL_MEDIUM, POLL_SLOW } from "@/lib/constants";
@@ -99,18 +97,3 @@ export function useRun(id: string) {
   });
 }
 
-export function useSessions(orgScope?: string) {
-  return useQuery({
-    queryKey: ["sessions", orgScope],
-    queryFn: () => getSessions(orgScope),
-    refetchInterval: POLL_SLOW,
-  });
-}
-
-export function useSession(id: string) {
-  return useQuery({
-    queryKey: ["sessions", id],
-    queryFn: () => getSession(id),
-    enabled: !!id,
-  });
-}

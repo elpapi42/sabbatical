@@ -218,32 +218,3 @@ class RunDetail(RunSummary):
     execution_steps: list[ExecutionStep]
 
 
-# ── Sessions ──
-
-
-class SessionCreate(BaseModel):
-    organization_scope: Optional[str] = None
-
-
-class SessionSummary(BaseModel):
-    id: str
-    organization_scope: Optional[str]
-    title: Optional[str]
-    total_cost: float
-    created_at: datetime
-
-
-class SessionMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-    created_at: datetime
-
-
-class SessionDetail(SessionSummary):
-    consumed_input_tokens: int
-    consumed_output_tokens: int
-    messages: list[SessionMessage]
-
-
-class MessageCreate(BaseModel):
-    content: str

@@ -29,49 +29,11 @@ async def sum_run_costs(db: databases.Database, **filters) -> dict:
 
 
 async def organization_total_cost(db: databases.Database, org_name: str) -> dict:
-    runs = await sum_run_costs(db, organization_name=org_name)
-    session_row = await db.fetch_one(
-        query="""
-            SELECT COALESCE(SUM(consumed_input_tokens), 0) as input_tokens,
-                   COALESCE(SUM(consumed_output_tokens), 0) as output_tokens,
-                   COALESCE(SUM(total_cost), 0.0) as cost
-            FROM sessions
-            WHERE organization_scope = :org_name
-        """,
-        values={"org_name": org_name},
-    )
-
-    session_inputs = session_row["input_tokens"] if session_row else 0
-    session_outputs = session_row["output_tokens"] if session_row else 0
-    session_cost = session_row["cost"] if session_row else 0.0
-
-    return {
-        "consumed_input_tokens": runs["consumed_input_tokens"] + session_inputs,
-        "consumed_output_tokens": runs["consumed_output_tokens"] + session_outputs,
-        "total_cost": runs["total_cost"] + session_cost,
-    }
+    return await sum_run_costs(db, organization_name=org_name)
 
 
 async def system_total_cost(db: databases.Database) -> dict:
-    runs = await sum_run_costs(db)
-    session_row = await db.fetch_one(
-        query="""
-            SELECT COALESCE(SUM(consumed_input_tokens), 0) as input_tokens,
-                   COALESCE(SUM(consumed_output_tokens), 0) as output_tokens,
-                   COALESCE(SUM(total_cost), 0.0) as cost
-            FROM sessions
-        """
-    )
-
-    session_inputs = session_row["input_tokens"] if session_row else 0
-    session_outputs = session_row["output_tokens"] if session_row else 0
-    session_cost = session_row["cost"] if session_row else 0.0
-
-    return {
-        "consumed_input_tokens": runs["consumed_input_tokens"] + session_inputs,
-        "consumed_output_tokens": runs["consumed_output_tokens"] + session_outputs,
-        "total_cost": runs["total_cost"] + session_cost,
-    }
+    return await sum_run_costs(db)
 
 
 def openrouter_cost(model: str, input_tokens: int, output_tokens: int) -> float:

@@ -3,7 +3,6 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   ListTodo,
-  MessageSquare,
   Users,
   ChevronDown,
   ChevronRight,
@@ -156,12 +155,6 @@ export default function OrgSidebar() {
           icon={ListTodo}
           label="Tasks"
           isActive={isActivePrefix(links.tasks())}
-        />
-        <NavLink
-          to={links.chat()}
-          icon={MessageSquare}
-          label="Chat"
-          isActive={isActivePrefix(links.chat())}
         />
       </nav>
 

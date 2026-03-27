@@ -201,35 +201,6 @@ export interface RunDetail extends RunSummary {
   execution_steps: ExecutionStep[];
 }
 
-// Sessions
-export interface SessionCreate {
-  organization_scope?: string;
-}
-
-export interface SessionSummary {
-  id: string;
-  organization_scope: string | null;
-  title: string | null;
-  total_cost: number;
-  created_at: string;
-}
-
-export interface SessionMessage {
-  role: "user" | "assistant";
-  content: string;
-  created_at: string;
-}
-
-export interface SessionDetail extends SessionSummary {
-  consumed_input_tokens: number;
-  consumed_output_tokens: number;
-  messages: SessionMessage[];
-}
-
-export interface MessageCreate {
-  content: string;
-}
-
 // Query params
 export interface TaskListParams {
   organization?: string;

@@ -147,49 +147,6 @@ runs = Table(
     CheckConstraint("status IN ('running', 'success', 'failed', 'preempted')"),
 )
 
-sessions = Table(
-    "sessions",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column(
-        "organization_scope",
-        String,
-        ForeignKey("organizations.name", ondelete="CASCADE"),
-        nullable=True,
-    ),
-    Column("title", String, nullable=True),
-    Column("consumed_input_tokens", Integer, nullable=False, server_default="0"),
-    Column("consumed_output_tokens", Integer, nullable=False, server_default="0"),
-    Column("total_cost", Float, nullable=False, server_default="0.0"),
-    Column(
-        "created_at",
-        String,
-        nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
-    ),
-)
-
-session_messages = Table(
-    "session_messages",
-    metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column(
-        "session_id",
-        String,
-        ForeignKey("sessions.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    Column("role", String, nullable=False),
-    Column("content", Text, nullable=False),
-    Column(
-        "created_at",
-        String,
-        nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
-    ),
-    CheckConstraint("role IN ('user', 'assistant')"),
-)
-
 
 class _PragmaPool:
     """Wraps SQLitePool to execute PRAGMAs on every new connection."""

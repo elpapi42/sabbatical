@@ -18,7 +18,6 @@ from sabbatical.api.routers import (
     agents,
     organizations,
     runs,
-    sessions,
     status,
     tasks,
 )
@@ -83,7 +82,6 @@ def create_app() -> FastAPI:
     app.include_router(agents.router, prefix="/api")
     app.include_router(tasks.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
-    app.include_router(sessions.router, prefix="/api")
 
     # Serve the web application if built static files exist
     web_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
