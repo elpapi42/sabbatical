@@ -118,7 +118,6 @@ class AgentDetail(AgentSummary):
 class TaskCreate(BaseModel):
     title: str
     organization: str
-    assignee: Optional[str] = "user"
     description: Optional[str] = None
 
 

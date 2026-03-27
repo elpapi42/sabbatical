@@ -241,7 +241,8 @@ def create_thread_tools(thread_state: dict, valid_route_targets: set[str]) -> li
         Only the first valid @tag is used; any additional tags are ignored.
 
         Args:
-            message: The comment to post. Write as if addressing your team.
+            message: The comment to post. Keep it focused — say what matters,
+                skip what doesn't. Write as if addressing your team.
             is_final: False (default) posts an intermediate note and you keep
                 working. Tags are informational only. True posts your final
                 message, routes via the single @tag, and ends execution.

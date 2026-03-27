@@ -107,7 +107,6 @@ export interface AgentDetail extends AgentSummary {
 export interface TaskCreate {
   title: string;
   organization: string;
-  assignee?: string;
   description?: string;
 }
 

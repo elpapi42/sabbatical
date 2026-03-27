@@ -47,16 +47,16 @@ async def create_task(task: TaskCreate, db=Depends(get_db)):
                 content={"message": f"Organization '{task.organization}' not found."},
             )
 
-        if task.assignee != "user":
-            agent = await db.fetch_one(
-                "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
-                {"name": task.assignee, "org": task.organization},
+        root_agent = await db.fetch_one(
+            "SELECT name FROM agents WHERE organization_name = :org AND boss IS NULL AND is_removed = 0 LIMIT 1",
+            {"org": task.organization},
+        )
+        if not root_agent:
+            return JSONResponse(
+                status_code=400,
+                content={"message": f"No root agent found in organization '{task.organization}'."},
             )
-            if not agent:
-                return JSONResponse(
-                    status_code=404,
-                    content={"message": f"Agent '{task.assignee}' not found."},
-                )
+        assignee = root_agent["name"]
 
         await db.execute(
             "UPDATE task_sequences SET next_number = next_number + 1 WHERE organization_name = :org",
@@ -69,7 +69,6 @@ async def create_task(task: TaskCreate, db=Depends(get_db)):
         task_id = generate_task_id(task.organization, seq["next_number"] - 1)
 
         now = utc_now()
-        queued_at = now if task.assignee != "user" else None
         desc = task.description if task.description else task.title
 
         await db.execute(
@@ -80,8 +79,8 @@ async def create_task(task: TaskCreate, db=Depends(get_db)):
                 "org": task.organization,
                 "title": task.title,
                 "desc": desc,
-                "assignee": task.assignee,
-                "queued_at": queued_at,
+                "assignee": assignee,
+                "queued_at": now,
                 "now": now,
             },
         )

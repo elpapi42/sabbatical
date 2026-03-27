@@ -26,9 +26,6 @@ def get_client():
 def create(
     title: str = typer.Argument(..., help="Brief description of the work"),
     organization: str = typer.Option(..., "--organization", help="Organization name"),
-    assign: str = typer.Option(
-        "user", "--assign", help="Initial assignee (agent name or 'user')"
-    ),
     description: Optional[str] = typer.Option(
         None, "--description", help="Detailed spec"
     ),
@@ -44,16 +41,13 @@ def create(
 
     with get_client() as client:
         try:
-            payload = {"title": title, "organization": organization, "assignee": assign}
+            payload = {"title": title, "organization": organization}
             if desc:
                 payload["description"] = desc
             resp = client.post("/tasks", json=payload)
             resp.raise_for_status()
             data = resp.json()
-            if assign != "user":
-                typer.echo(f"Created {data['id']} (assigned to {assign}, queued for dispatch)")
-            else:
-                typer.echo(f"Created {data['id']} (assigned to user)")
+            typer.echo(f"Created {data['id']}")
         except httpx.HTTPStatusError as e:
             print_json_error(e.response)
 

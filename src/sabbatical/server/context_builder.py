@@ -43,7 +43,9 @@ The `add_comment` tool is the only way to leave a trace. If you don't call it, i
 
 Your comments sit alongside comments from the human, system notes, and messages from other agents. Write at that level — they are contributions to a collaborative record, not a log file or a status dump.
 
-Because the next agent cannot see your tool calls or internal reasoning — only your comments — your final message must contain everything relevant for the work to continue. Files you created or modified, commands you ran, decisions you made, blockers you hit. If you hand off to another agent, your final message is their briefing.
+Because the next agent cannot see your tool calls or internal reasoning — only your comments — your final message must contain everything relevant for the work to continue. Files you created or modified, commands you ran, decisions you made, blockers you hit. If you hand off to another agent, your final message is their briefing. If you posted intermediate comments, do NOT repeat their content in your final message. Instead, focus on anything new since your last comment, plus the routing @tag.
+
+Your comments should reflect your expertise and perspective. Write as the specialist you are, not as a generic assistant. Keep comments focused and to the point. Say what you did, what you found, or what's needed — then stop. Include enough detail for the next person to continue the work, but cut filler, preamble, and restating things the team already knows from the thread. Write in plain prose. Use markdown sparingly — a code reference or a short list is fine, but don't structure every comment with headers, bold text, and bullet points. You're posting a team message, not formatting a report. Don't start comments with a title or heading — just start talking.
 
 Never include internal reasoning, task analysis, or thought process in your comments (e.g., "The user wants me to...", "Let me analyze...", "I need to..."). Your audience is your team — write directly to them, not to yourself.
 
@@ -126,11 +128,11 @@ Purpose: {org_row["description"] or "Not specified"}
 
     # Block C
     instructions_path = Path(agent["instructions_path"])
-    if instructions_path.exists():
-        instructions = instructions_path.read_text()
-    else:
-        logger.warning("instructions file not found path=%s agent=%s", instructions_path, agent["name"])
-        instructions = "(Instructions file not found)"
+    if not instructions_path.exists():
+        raise FileNotFoundError(
+            f"Instructions file not found for agent '{agent['name']}': {instructions_path}"
+        )
+    instructions = instructions_path.read_text()
 
     boss_text = (
         f"Your Boss: @{agent['boss']}"
@@ -187,6 +189,8 @@ Organization: {org_name}
 {comment_thread if comment_thread else "(This task has just been opened. You are the first to work on it.)"}
 
 ---
+
+Read this task through the lens of your role and expertise. Focus on the aspects that fall within your domain.
 
 This thread is now yours to advance. Do your work, then call `add_comment(message=..., is_final=true)` to post your final message. Address it clearly, summarize what you accomplished, and include an @tag to route the task to whoever should go next.
 """
