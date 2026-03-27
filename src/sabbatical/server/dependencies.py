@@ -14,3 +14,7 @@ async def get_config(request: Request) -> SabbaticalConfig:
 
 async def get_dispatcher(request: Request):
     return request.app.state.dispatcher
+
+
+async def get_broadcaster(request: Request):
+    return request.app.state.broadcaster

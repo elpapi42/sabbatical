@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class Dispatcher:
-    def __init__(self, db, config):
+    def __init__(self, db, config, broadcaster=None):
         self._db = db
         self._config = config
+        self._broadcaster = broadcaster
         self._active_workers: dict[str, asyncio.Task] = {}
         self._shutdown_event = asyncio.Event()
 
@@ -105,6 +106,7 @@ class Dispatcher:
                 run_id=run_id,
                 agent_name=agent_name,
                 org_name=org_name,
+                broadcaster=self._broadcaster,
             )
         )
         self._active_workers[task_id] = worker_task

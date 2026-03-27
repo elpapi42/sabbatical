@@ -211,6 +211,86 @@ def create_workspace_tools(workspace_path: str) -> list:
     return [file_read, file_write, editor, shell]
 
 
+def create_thread_tools(thread_state: dict, valid_route_targets: set[str]) -> list:
+    """Return the add_comment tool bound to the given thread state.
+
+    The tool writes to thread_state which is read by the worker event loop
+    to flush comments to the DB and detect the final response.
+
+    valid_route_targets: set of agent names + "user" that are valid @tag targets.
+    """
+    from sabbatical.server.tag_parser import extract_all_tags
+
+    def add_comment(message: str, is_final: bool = False, tool_context=None) -> str:
+        """Post a comment to the task's comment thread.
+
+        This is the ONLY way to write to the thread — your text output and
+        reasoning are completely private and invisible to the team.
+
+        Call with is_final=false (the default) to leave notes, share findings,
+        or document context without ending your turn. You keep working after
+        the call. Use this freely whenever you discover something worth
+        recording — partial results, decisions, observations, or blockers.
+        You can mention @tags in intermediate comments without triggering
+        routing — they serve as informational pointers for whoever reads
+        the thread later.
+
+        Call with is_final=true once when you are done. This posts your final
+        message, triggers routing via the @tag, and ends your execution.
+        Your final message must contain exactly one @tag to route the task.
+        Only the first valid @tag is used; any additional tags are ignored.
+
+        Args:
+            message: The comment to post. Write as if addressing your team.
+            is_final: False (default) posts an intermediate note and you keep
+                working. Tags are informational only. True posts your final
+                message, routes via the single @tag, and ends execution.
+                Can only be true once.
+        """
+        if is_final:
+            if thread_state["final_submitted"]:
+                return "Error: A final comment has already been submitted. You cannot submit twice."
+
+            # Validate that the message contains exactly one valid @tag for routing
+            tags = extract_all_tags(message)
+            valid_found = [t for t in tags if t in valid_route_targets]
+            if not valid_found:
+                invalid_tags = [f"@{t}" for t in tags] if tags else []
+                roster_list = ", ".join(f"@{n}" for n in sorted(valid_route_targets))
+                if invalid_tags:
+                    return (
+                        f"Error: Your final message contains {', '.join(invalid_tags)}, "
+                        f"but none are valid routing targets. "
+                        f"Valid targets: {roster_list}. "
+                        f"Please call add_comment again with is_final=true and a valid @tag in your message."
+                    )
+                else:
+                    return (
+                        f"Error: Your final message must contain an @tag to route the task. "
+                        f"Valid targets: {roster_list}. "
+                        f"Please call add_comment again with is_final=true and a valid @tag in your message."
+                    )
+            if len(valid_found) > 1:
+                found_list = ", ".join(f"@{t}" for t in valid_found)
+                return (
+                    f"Error: Your final message contains multiple valid @tags: {found_list}. "
+                    f"Only one routing target is allowed in a final message. "
+                    f"Please call add_comment again with is_final=true and exactly one @tag."
+                )
+
+            thread_state["final_submitted"] = True
+            if tool_context is not None:
+                tool_context.actions.skip_summarization = True
+
+        thread_state["pending_comments"].append((message, is_final))
+
+        if is_final:
+            return "Final comment submitted. Your execution will now end."
+        return "Comment posted to thread."
+
+    return [add_comment]
+
+
 def create_file_read_tool(workspace_path: str):
     """Return a standalone file_read tool bound to the given workspace.
 

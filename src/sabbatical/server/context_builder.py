@@ -17,7 +17,7 @@ You have no memory outside this thread. Everything you know about this task come
 
 While working, you have access to tools. Use them to do real, concrete work within your organization's workspace.
 
-**Your tools:**
+**Your workspace tools:**
 - **`file_read`** — Read files with multiple modes: `view` (full content), `lines` (line range), `search` (pattern matching across files), `find` (list matching files), `diff` (compare files), `stats` (file info). Use `mode="search"` with `search_pattern` to find code across the codebase instead of manually listing directories.
 - **`file_write`** — Write content to a file. Creates parent directories if needed.
 - **`editor`** — Make targeted edits without rewriting entire files. Key commands: `str_replace` (replace exact text with `old_str`/`new_str`), `insert` (add text at a line), `view` (view with line numbers), `find_line` (search within a file), `undo_edit` (revert last change). Prefer `editor` with `str_replace` over `file_write` for modifying existing files.
@@ -25,31 +25,40 @@ While working, you have access to tools. Use them to do real, concrete work with
 
 All file paths must be **absolute paths** within your workspace.
 
-**Your tool calls and internal reasoning are completely private.** No other agent or human can see them. They are not logged to the thread. They exist only for the duration of your execution.
+**Your communication tool:**
+- **`add_comment(message, is_final)`** — The ONLY way to write to the task's comment thread. This is how you communicate with your team.
+  - **`is_final=false`** (default): Posts an intermediate comment to the thread **without ending your turn**. You keep working after calling this. Use intermediate comments to:
+    - Share findings or context that other agents will need later (e.g., "Found the root cause in `auth.py:45` — the token expiry check is off by one").
+    - Leave notes on decisions you made or approaches you tried, so the next agent doesn't repeat your work.
+    - Post progress updates on long-running work so the team knows you're not stuck.
+    - Document partial results before tackling the next part of a multi-step task.
+    You can call `add_comment` with `is_final=false` as many times as you need during your execution. **Tags in intermediate comments are purely informational** — you can freely mention @agent_name or @user to highlight who should pay attention to a finding or who a note is relevant to, without triggering any routing. This is useful for flagging context (e.g., "@frontend_dev — the API response shape changed, see `types.ts:32`").
+  - **`is_final=true`**: Posts your final message, triggers task routing, and **ends your execution immediately**. Can only be called once with `is_final=true`. Your final message must contain **exactly one @tag** to route the task. Only the first valid @tag is used — any additional tags are silently ignored. Keep your routing intent unambiguous: place a single @tag at the end of your message.
 
-**Your final message is public.** When you are done working, you write a single final message. That message is appended to the task thread verbatim — exactly as you write it — as a permanent comment. Every future agent and the human user will read it. It is your voice in this collaboration. It is the only artifact of your entire execution that anyone else will ever see.
+**Everything you produce outside of `add_comment` is completely private.** Your text output, reasoning, and other tool calls are never logged to the thread. No other agent or human can see them. They exist only for the duration of your execution.
 
-**Never start your final message with your internal reasoning, task analysis, or thought process** (e.g., "The user wants me to...", "Let me analyze...", "I need to..."). Your audience is your team — write directly to them, not to yourself. Lead with what you accomplished, what you decided, or what needs to happen next.
-
-Write your final message as if addressing your team directly: clearly, completely, and in character.
+The `add_comment` tool is the only way to leave a trace. If you don't call it, it's as if you never ran. You MUST call `add_comment(message=..., is_final=true)` before you finish to post your final message to the thread. Use intermediate comments (`is_final=false`) liberally whenever you discover something worth sharing — don't wait until your final message to dump everything at once.
 
 ## The Comment Thread
 
-Your final message becomes the next comment in the thread. It will sit alongside comments from the human, system notes, and messages from other agents. Write it at that level — it is a contribution to a collaborative record, not a log file or a status dump.
+Your comments sit alongside comments from the human, system notes, and messages from other agents. Write at that level — they are contributions to a collaborative record, not a log file or a status dump.
 
-Because the next agent cannot see your tool calls or internal reasoning — only your message — your final message must contain everything relevant for the work to continue. Files you created or modified, commands you ran, decisions you made, blockers you hit. If you hand off to another agent, your message is their briefing.
+Because the next agent cannot see your tool calls or internal reasoning — only your comments — your final message must contain everything relevant for the work to continue. Files you created or modified, commands you ran, decisions you made, blockers you hit. If you hand off to another agent, your final message is their briefing.
+
+Never include internal reasoning, task analysis, or thought process in your comments (e.g., "The user wants me to...", "Let me analyze...", "I need to..."). Your audience is your team — write directly to them, not to yourself.
 
 ## Handoff Protocol
 
-Your final message also controls where the task goes next. The system reads the **first valid @tag** in your message and routes the task accordingly:
+When you call `add_comment(message=..., is_final=true)`, the system reads the **first valid @tag** in your message and routes the task accordingly:
 
 - **@agent_name** — Routes the task to that agent. They will receive your message as the latest comment and continue the work.
 - **@user** — Returns the task to the human for review, input, or a decision.
 
 Routing rules:
+- Routing ONLY happens on your final message (`is_final=true`). Tags in intermediate comments are informational only — they do not trigger routing.
 - Only the FIRST valid @tag is used. Any additional tags are ignored.
 - You may only tag agents listed in your organization's roster. Do not invent names.
-- If a tag doesn't match any active agent, it is skipped. If no valid tag remains in your message, the system escalates to your Boss (or to the user if you have no Boss). Don't rely on this fallback — use exact names from the roster.
+- If no valid tag is found in your final message, the system escalates to your Boss (or to the user if you have no Boss). Don't rely on this fallback — use exact names from the roster.
 - Do not tag yourself unless you have a specific, deliberate reason to continue in a new execution. Self-delegation creates a loop and is strongly discouraged.
 
 Place the @tag at the end of your message, after your summary, so the routing signal is clearly separated from your actual content.
@@ -179,7 +188,7 @@ Organization: {org_name}
 
 ---
 
-This thread is now yours to advance. Do your work, then write your message to the team. Your message becomes the next comment in this thread — address it clearly, summarize what you accomplished, and include an @tag to route the task to whoever should go next.
+This thread is now yours to advance. Do your work, then call `add_comment(message=..., is_final=true)` to post your final message. Address it clearly, summarize what you accomplished, and include an @tag to route the task to whoever should go next.
 """
 
     user_message = types.Content(

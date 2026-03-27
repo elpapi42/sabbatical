@@ -21,7 +21,31 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
+async def _flush_steps(db, run_id, steps):
+    await db.execute(
+        "UPDATE runs SET execution_steps = :steps WHERE id = :id",
+        {"steps": json.dumps(steps), "id": run_id},
+    )
+
+
+async def _flush_pending_comments(db, task_id, agent_name, thread_state):
+    """Flush any pending add_comment messages to the DB. Returns the final message if one was submitted."""
+    final_message = None
+    while thread_state["pending_comments"]:
+        message, is_final = thread_state["pending_comments"].pop(0)
+        now = utc_now()
+        if is_final:
+            final_message = message
+            # Final comment is written by handle_routing, not here
+        else:
+            await db.execute(
+                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, :author, :body, :now)",
+                {"task_id": task_id, "author": agent_name, "body": message, "now": now},
+            )
+    return final_message
+
+
+async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, broadcaster=None):
     logger.info(
         "run start run_id=%s task_id=%s agent=%s org=%s",
         run_id, task_id, agent_name, org_name
@@ -30,6 +54,8 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
     steps = []
     total_input_tokens = 0
     total_output_tokens = 0
+    thread_state = None
+    reply_text = None
 
     try:
         agent_row = await db.fetch_one(
@@ -62,18 +88,25 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
 
         model = agent_row["model"] or config.llm.default_model
 
-        runner, session_id = create_agent_runner(
+        # Build roster of valid routing targets for tag validation
+        roster = await db.fetch_all(
+            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            {"org": org_name},
+        )
+        valid_route_targets = {r["name"] for r in roster} | {"user"}
+
+        runner, session_id, thread_state = create_agent_runner(
             agent_name=agent_name,
             system_prompt=system_prompt,
             model=model,
             openrouter_api_key=config.llm.openrouter_api_key,
             workspace_path=org_row["workspace_path"],
             max_iterations=agent_row["max_iterations"],
+            valid_route_targets=valid_route_targets,
         )
 
         step_count = 0
         iteration_count = 0
-        final_text_parts = []
 
         async for event in runner.run_async(
             user_id="sabbatical",
@@ -86,33 +119,40 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 text = "".join(
                     p.text for p in event.content.parts if p.text
                 )
-                if text:
-                    final_text_parts.append(text)
 
             # Record reasoning text (even if the event also contains tool calls)
             if text and not event.partial:
                 step_count += 1
                 logger.debug("llm step run_id=%s step=%d", run_id, step_count)
-                steps.append(
-                    {
-                        "step": step_count,
-                        "type": "llm_reasoning",
-                        "content": text,
-                    }
-                )
+                step_data = {
+                    "step": step_count,
+                    "type": "llm_reasoning",
+                    "content": text,
+                }
+                steps.append(step_data)
+                await _flush_steps(db, run_id, steps)
+                if broadcaster:
+                    broadcaster.publish(run_id, "step", step_data)
 
             # Record tool calls
             for fc in event.get_function_calls():
                 step_count += 1
                 logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
-                steps.append(
-                    {
-                        "step": step_count,
-                        "type": "tool_call",
-                        "tool": fc.name,
-                        "arguments": dict(fc.args) if fc.args else {},
-                    }
-                )
+                step_data = {
+                    "step": step_count,
+                    "type": "tool_call",
+                    "tool": fc.name,
+                    "arguments": dict(fc.args) if fc.args else {},
+                }
+                steps.append(step_data)
+                await _flush_steps(db, run_id, steps)
+                if broadcaster:
+                    broadcaster.publish(run_id, "step", step_data)
+
+            # Flush pending comments from add_comment tool
+            flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
+            if flushed_final is not None:
+                reply_text = flushed_final
 
             if event.usage_metadata and not event.partial:
                 total_input_tokens += event.usage_metadata.prompt_token_count or 0
@@ -126,15 +166,33 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 )
                 raise MaxIterationsExceeded(iteration_count)
 
-        final_text = "".join(final_text_parts) if final_text_parts else None
+        # Flush any remaining pending comments after the loop ends
+        if thread_state:
+            flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
+            if flushed_final is not None:
+                reply_text = flushed_final
 
-        if final_text:
-            steps.append(
+        # Record the final output step
+        if reply_text:
+            step_data = {
+                "step": step_count + 1,
+                "type": "final_output",
+                "content": reply_text,
+            }
+            steps.append(step_data)
+            await _flush_steps(db, run_id, steps)
+            if broadcaster:
+                broadcaster.publish(run_id, "step", step_data)
+        else:
+            # Agent never called add_comment(is_final=true)
+            logger.warning("agent did not submit final response run_id=%s", run_id)
+            await db.execute(
+                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
-                    "step": step_count + 1,
-                    "type": "final_output",
-                    "content": final_text,
-                }
+                    "task_id": task_id,
+                    "body": "[SYSTEM: Agent completed execution without submitting a final response.]",
+                    "now": utc_now(),
+                },
             )
 
         cost = openrouter_cost(
@@ -170,12 +228,24 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             org_name=org_name,
             agent_name=agent_name,
             agent_boss=agent_row["boss"],
-            final_text=final_text or "",
+            final_text=reply_text or "",
             run_id=run_id,
         )
 
+        if broadcaster:
+            broadcaster.publish(run_id, "done", {
+                "status": "success",
+                "total_cost": cost,
+                "consumed_input_tokens": total_input_tokens,
+                "consumed_output_tokens": total_output_tokens,
+            })
+            broadcaster.close(run_id)
+
     except MaxIterationsExceeded as e:
         logger.warning("max iterations exceeded run_id=%s task_id=%s", run_id, task_id)
+        # Flush any remaining pending comments
+        if thread_state:
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
         await fail_run(
             db,
             run_id,
@@ -185,8 +255,12 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             total_output_tokens,
             f"Max iterations reached ({e.count})",
         )
+        if broadcaster:
+            broadcaster.close(run_id)
     except asyncio.CancelledError:
         logger.info("run preempted run_id=%s task_id=%s", run_id, task_id)
+        if thread_state:
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
         await db.execute(
             """UPDATE runs
                SET status = 'preempted', ended_at = :now,
@@ -201,12 +275,18 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 "id": run_id,
             },
         )
+        if broadcaster:
+            broadcaster.close(run_id)
         raise
     except Exception as e:
         logger.exception("run fatal error run_id=%s task_id=%s", run_id, task_id)
+        if thread_state:
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
         await fail_run(
             db, run_id, task_id, steps, total_input_tokens, total_output_tokens, str(e)
         )
+        if broadcaster:
+            broadcaster.close(run_id)
 
 
 def _sanitize_error(reason: str) -> str:

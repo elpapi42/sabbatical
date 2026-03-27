@@ -124,7 +124,7 @@ class TaskCreate(BaseModel):
 
 TaskStatus = Literal["open", "in_progress", "failed", "done", "canceled"]
 RunStatus = Literal["running", "success", "failed", "preempted"]
-StepType = Literal["llm_reasoning", "tool_call", "final_output"]
+StepType = Literal["llm_reasoning", "tool_call", "final_output", "fatal_error"]
 
 
 class TaskSummary(BaseModel):

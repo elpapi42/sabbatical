@@ -201,15 +201,11 @@ async def get_task(id: str, db=Depends(get_db)):
                 "cost": r["total_cost"],
                 "started_at": r["started_at"],
                 "ended_at": r["ended_at"],
-                "created_at": r["ended_at"] or r["started_at"],  # for sorting
+                "created_at": r["started_at"],
             }
         )
 
     timeline.sort(key=lambda x: x["created_at"])
-    # clean up created_at from run_summary so it matches model
-    for item in timeline:
-        if item["type"] == "run_summary":
-            del item["created_at"]
 
     cost_data = await sum_run_costs(db, task_id=id)
 

@@ -6,7 +6,7 @@ export type TaskStatus =
   | "done"
   | "canceled";
 export type RunStatus = "running" | "success" | "failed" | "preempted";
-export type StepType = "llm_reasoning" | "tool_call" | "final_output";
+export type StepType = "llm_reasoning" | "tool_call" | "final_output" | "fatal_error";
 
 // API error
 export interface ApiError {

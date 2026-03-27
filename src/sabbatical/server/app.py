@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from sabbatical.config import CONFIG_PATH, load_config
 from sabbatical.db import get_database
 from sabbatical.logging_setup import setup_logging
+from sabbatical.server.broadcast import RunEventBroadcaster
 from sabbatical.server.dispatcher import Dispatcher
 from sabbatical.server.routers import (
     agents,
@@ -58,12 +59,14 @@ async def lifespan(app: FastAPI):
 
     db = await get_database(config.server.db_path)
 
-    dispatcher = Dispatcher(db=db, config=config)
+    broadcaster = RunEventBroadcaster()
+    dispatcher = Dispatcher(db=db, config=config, broadcaster=broadcaster)
     dispatcher_task = asyncio.create_task(dispatcher.run_loop())
 
     app.state.db = db
     app.state.config = config
     app.state.dispatcher = dispatcher
+    app.state.broadcaster = broadcaster
 
     yield
 

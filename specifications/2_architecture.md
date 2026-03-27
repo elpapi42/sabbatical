@@ -60,7 +60,10 @@ All agents share a static, hardcoded tool set. Tools are not configurable per ag
 All standard CLI commands mapping to Organization, Agent, Task, and Run management are executed as standard REST API calls (e.g., `POST /api/tasks`, `GET /api/organizations/:name`).
 
 ### Real-Time Streaming
-The API Server exposes a dedicated streaming endpoint (via Server-Sent Events) to handle the conversational UX of The Assistant and to pipe live token generation to the CLI without blocking standard HTTP threads.
+The API Server exposes streaming endpoints via Server-Sent Events (SSE) for two purposes:
+
+1. **Assistant Token Streaming** — `POST /api/sessions/:id/messages` streams token-by-token LLM output to the CLI and web UI during conversational interactions with The Assistant.
+2. **Run Execution Streaming** — `GET /api/runs/:id/stream` streams execution steps (reasoning, tool calls, final output) in real-time as an agent worker processes a task. The worker publishes events to an in-memory `RunEventBroadcaster` (asyncio-based pub/sub), and the SSE endpoint subscribes to the relevant channel. Multiple clients can observe the same run simultaneously. For completed runs, the endpoint replays stored steps as a burst.
 
 ## 5. LLM Provider
 The first release exclusively supports the **OpenRouter API** as the LLM provider. All LLM calls — from agent worker threads and The Assistant — are routed through OpenRouter. Model selection is configured globally via the configuration file.

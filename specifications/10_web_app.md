@@ -423,6 +423,16 @@ Runs are surfaced inline in the task timeline as run summary cards (Section 7.2)
 
 **Step Number**: Each step displays its ordinal number (`Step 1`, `Step 2`, ...) in a left-margin gutter, connected by a vertical line (like a Git commit graph) to provide visual sequencing.
 
+### 8.3 Real-Time Run Streaming
+
+When the Run Detail page loads a run with status `running`, it automatically connects to `GET /api/runs/:runId/stream` via `fetch()` + `ReadableStream` (the same SSE parsing pattern used by the Chat interface). This provides real-time observability of agent execution:
+
+- **Live Badge**: A green "Live" pill with a pulsing dot appears next to the status badge while the stream is active.
+- **Step Streaming**: Each `step` SSE event appends a new execution step to the timeline immediately, using the same step rendering components (reasoning, tool call, final output). The latest step receives a highlight treatment (green step number, fade-in animation).
+- **Stream Completion**: On the `done` SSE event, the stream closes and the page invalidates its TanStack Query cache to fetch the final run state from the REST API.
+- **Fallback**: The existing 3-second polling via `useRun()` continues as a safety net. If the SSE connection fails or drops, the polling catches up automatically. No explicit reconnection logic is needed.
+- **Multiple Tabs**: The backend supports multiple simultaneous subscribers per run, so multiple browser tabs can observe the same run.
+
 ---
 
 ## 9. Chat / Session Views

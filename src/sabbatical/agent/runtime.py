@@ -5,7 +5,7 @@ from google.adk import Agent, Runner
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import InMemorySessionService
 
-from sabbatical.agent.tools import create_workspace_tools
+from sabbatical.agent.tools import create_thread_tools, create_workspace_tools
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,8 @@ def create_agent_runner(
     openrouter_api_key: str,
     workspace_path: str,
     max_iterations: int,
-) -> tuple[Runner, str]:
+    valid_route_targets: set[str] | None = None,
+) -> tuple[Runner, str, dict]:
     logger.debug(
         "creating agent runner agent=%s model=%s workspace=%s",
         agent_name,
@@ -30,7 +31,14 @@ def create_agent_runner(
         api_key=openrouter_api_key,
     )
 
-    tools = create_workspace_tools(workspace_path)
+    thread_state = {
+        "pending_comments": [],
+        "final_submitted": False,
+    }
+
+    workspace_tools = create_workspace_tools(workspace_path)
+    thread_tools = create_thread_tools(thread_state, valid_route_targets or {"user"})
+    tools = workspace_tools + thread_tools
 
     agent = Agent(
         name=agent_name,
@@ -49,4 +57,4 @@ def create_agent_runner(
 
     session_id = f"run-{uuid.uuid4().hex[:8]}"
 
-    return runner, session_id
+    return runner, session_id, thread_state
