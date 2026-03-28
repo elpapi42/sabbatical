@@ -12,6 +12,9 @@ A lightweight terminal interface. It parses user commands, makes HTTP requests t
 ### The Web Application (The Second Client)
 A browser-based graphical interface served directly by the API Server as bundled static files. It provides the same capabilities as the CLI (excluding server lifecycle commands) with a persistent visual interface for monitoring tasks and exploring hierarchies. The web app is organization-scoped — navigation is structured around a selected organization, with all views (tasks, agents) filtered to that context.
 
+### The MCP Server (The Machine Client)
+An MCP (Model Context Protocol) server that exposes the full Sabbatical API as tools over stdio transport. Unlike the CLI and web app (which are human interfaces), the MCP server enables external AI agents (Claude Code, Codex, Gemini, etc.) to manage Sabbatical programmatically. It is a thin proxy — each MCP tool maps 1:1 to an API endpoint, forwarding requests to the running API Server over HTTP via `httpx.AsyncClient`. The MCP server is started via `sabbatical mcp` (or the `sabbatical-mcp` entry point) and communicates over stdin/stdout using the FastMCP framework. MCP clients (like Claude Code) typically spawn the server as a subprocess.
+
 ## 2. The Dispatcher (Database-as-a-Queue)
 The Dispatcher is a continuous background polling loop running within the API Server that monitors the database for dispatchable tasks, claims them atomically, and manages worker threads. It replaces traditional in-memory event buses with a **database-as-a-queue** model — the SQLite database itself is the queue.
 

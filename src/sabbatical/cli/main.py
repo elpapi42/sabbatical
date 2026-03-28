@@ -13,5 +13,13 @@ app.add_typer(agent_app, name="agent")
 app.add_typer(task_app, name="task")
 app.add_typer(run_app, name="run")
 
+
+@app.command()
+def mcp():
+    """Start the Sabbatical MCP server (stdio transport)."""
+    from sabbatical.mcp.server import main as mcp_main
+
+    mcp_main()
+
 if __name__ == "__main__":
     app()

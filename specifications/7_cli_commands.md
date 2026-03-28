@@ -1,7 +1,7 @@
 # CLI Command Reference
 
 ## 1. Philosophy
-The CLI is a thin client — a human interface to the Sabbatical API Server. Every command translates to an HTTP request to the API Server. The CLI performs zero direct database writes and does not interact with the Dispatcher directly. Commands are organized into six groups: **server**, **organization**, **agent**, **task**, **run**, and **chat**.
+The CLI is a thin client — a human interface to the Sabbatical API Server. Every command translates to an HTTP request to the API Server. The CLI performs zero direct database writes and does not interact with the Dispatcher directly. Commands are organized into five groups: **server**, **organization**, **agent**, **task**, and **run**. Additionally, the CLI provides an **mcp** command to start the MCP server for AI agent integration.
 
 ---
 
@@ -24,7 +24,7 @@ Tail the server log file.
 
 ### `server status`
 Print a snapshot of the system.
-* **Action:** Queries the API Server and outputs whether it is running, the count of tasks by status (`open`, `in_progress`, `failed`, `done`, `canceled`), the number of active worker threads, and the **total lifetime cost** incurred across all organizations and system-level Assistant chats.
+* **Action:** Queries the API Server and outputs whether it is running, the count of tasks by status (`open`, `in_progress`, `failed`, `done`, `canceled`), the number of active worker threads, and the **total lifetime cost** incurred across all organizations.
 
 ---
 
@@ -54,10 +54,10 @@ Modify an organization's metadata.
 * **Note:** Organization renaming is not supported in V1.
 
 ### `organization delete <name>`
-Delete an organization and **all associated data**: agents, tasks, runs, and scoped sessions. This is a hard, irreversible cascade delete.
+Delete an organization and **all associated data**: agents, tasks, and runs. This is a hard, irreversible cascade delete.
 * **Flags:**
   * `--yes` / `-y` — Skip the confirmation prompt (for scripting/non-interactive use).
-* **Confirmation:** Unless `--yes` is passed, the CLI prompts: `"This will permanently delete organization '<name>' and all associated agents, tasks, runs, and chat sessions. Continue? [y/N]"`. The user must type `y` to proceed.
+* **Confirmation:** Unless `--yes` is passed, the CLI prompts: `"This will permanently delete organization '<name>' and all associated agents, tasks, and runs. Continue? [y/N]"`. The user must type `y` to proceed.
 * **Validation:** Errors if any task in this organization has status `in_progress`. The user must preempt or cancel active tasks first.
 * **Action:** Sends a request to the API Server to permanently remove the organization and all associated data from the state store.
 
@@ -178,21 +178,11 @@ List all runs associated with a specific task.
 
 ---
 
-## 7. Chat
+## 7. MCP
 
-### `chat new [--organization <organization_name>]`
-Start a new conversational session with The Assistant.
-* **Flags:**
-  * `--organization <organization_name>` — Optional. Scopes the session to a specific organization, giving The Assistant context about the organization's agents, hierarchy, and active tasks.
-* **Action:** Creates a new Session entity in the database and launches the interactive TUI. The Assistant can propose organizational structures, generate agent prompts, create tasks, and populate the state store — but only after explicit user approval within the conversation. All writes are executed by the API Server through the same state store operations as the manual CLI commands.
-* **Exit:** The user exits the session with `exit` or `Ctrl+C`. The session persists in the database and can be resumed later.
-
-### `chat list [--organization <organization_name>]`
-List historical chat sessions.
-* **Flags:**
-  * `--organization <organization_name>` — Optional. Filter sessions scoped to a specific organization.
-* **Action:** Outputs a table of chat sessions with their ID, auto-generated title, organization scope (if any), cost, and creation date.
-
-### `chat resume <session_id>`
-Resume a previous chat session.
-* **Action:** Fetches a historical session from the database and re-launches the TUI, allowing the user to pick up the conversation exactly where they left off.
+### `mcp`
+Start the Sabbatical MCP server (stdio transport).
+* **Action:** Launches the MCP (Model Context Protocol) server, which exposes the full Sabbatical API as tools over stdin/stdout. This enables external AI agents (Claude Code, Codex, Gemini, etc.) to manage organizations, agents, tasks, and runs programmatically. The MCP server is a thin proxy — each tool maps 1:1 to an API endpoint, forwarding requests to the running API Server over HTTP.
+* **Usage:** Typically not called directly by users. Instead, MCP clients register this command as a server. For example, in Claude Code: `claude mcp add sabbatical -- sabbatical mcp`. The client spawns the MCP server as a subprocess and communicates via stdio.
+* **Prerequisite:** The Sabbatical API Server must be running (`server up`). The MCP server connects to it on startup.
+* **Entry point:** Also available as the standalone `sabbatical-mcp` command (registered as a separate script entry point in `pyproject.toml`).

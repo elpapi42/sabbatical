@@ -9,7 +9,7 @@ The Sabbatical Web Application is a browser-based graphical interface for the Sa
 The CLI excels at rapid, scriptable operations but falls short for:
 - **Monitoring**: Watching task progress, run execution, and cost accumulation across an entire system at a glance.
 - **Exploration**: Navigating organizational hierarchies, reading task timelines, and drilling into run execution steps.
-- **Rich Interaction**: Composing comments with @-mention autocomplete, streaming chat with The Assistant, and inspecting deeply nested data.
+- **Rich Interaction**: Composing comments with @-mention autocomplete and inspecting deeply nested data.
 
 The web app provides a persistent, visual, always-open interface that makes the system's state immediately legible.
 
@@ -35,9 +35,9 @@ The web app covers all public API endpoints except `POST /api/shutdown`. Every C
 | Routing | React Router v7 | Client-side routing with URL-driven views. |
 | Styling | Tailwind CSS v4 | Utility-first, rapid iteration, consistent design tokens. |
 | State Management | TanStack Query (React Query) v5 | Server-state caching, automatic refetching (polling), optimistic updates, stale-while-revalidate. |
-| SSE Client | Native `EventSource` / `fetch` with `ReadableStream` | Minimal dependency; the Assistant streaming endpoint uses standard SSE. |
+| SSE Client | Native `EventSource` / `fetch` with `ReadableStream` | Minimal dependency; the run streaming endpoint uses standard SSE. |
 | Icons | Lucide React | Lightweight, consistent icon set. |
-| Markdown Rendering | `react-markdown` + `remark-gfm` | Agent and assistant outputs often contain Markdown. |
+| Markdown Rendering | `react-markdown` + `remark-gfm` | Agent outputs often contain Markdown. |
 | Code Highlighting | `shiki` | Syntax highlighting for code blocks in run execution steps and agent output. |
 | Tree Visualization | Custom component (CSS-only) | The agent hierarchy is shallow enough that a library is unnecessary. |
 | Package Manager | npm | Standard, no special requirements. |
@@ -66,8 +66,6 @@ The web app is **organization-scoped** — all views are accessed within the con
 | `/org/:name/tasks` | Task List | Filterable task table scoped to the organization. |
 | `/org/:name/tasks/:id` | Task Detail | Full timeline (comments + run summaries), comment input, action buttons. |
 | `/org/:name/tasks/:id/runs/:runId` | Run Detail | Execution steps with tool calls, reasoning, final output. |
-| `/org/:name/chat` | Session List | Chat sessions scoped to the organization. |
-| `/org/:name/chat/:id` | Chat Interface | Full streaming chat with The Assistant. |
 
 ### 3.3 Navigation Layout
 
@@ -84,7 +82,7 @@ The application uses a **dual-sidebar + main content area** layout: a narrow **O
 │ a  │  ├ dev   │                                       │
 │ i  │  └ tester│                                       │
 │ l  │ Tasks    │                                       │
-│    │ Chat     │                                       │
+│    │          │                                       │
 │    │──────────│                                       │
 │ +  │ Agents: 3│                                       │
 │    │ Cost: $x │                                       │
@@ -99,7 +97,7 @@ The application uses a **dual-sidebar + main content area** layout: a narrow **O
 
 **Organization Sidebar** (224px wide, collapsible):
 1. **Org header**: Organization name (link to overview), settings icon.
-2. **Navigation links**: Overview, Agents (collapsible list showing individual agents), Tasks, Chat. Active link is visually highlighted.
+2. **Navigation links**: Overview, Agents (collapsible list showing individual agents), Tasks. Active link is visually highlighted.
 3. **Footer**: Agent count and total cost for the organization.
 
 **Breadcrumbs**: Displayed at the top of the main content area via a `BreadcrumbBar` component, reflecting the current navigation path (e.g., `react_app > Tasks > REAC-0003`). Single-item breadcrumbs render as page titles.
@@ -393,7 +391,7 @@ Runs are surfaced inline in the task timeline as run summary cards (Section 7.2)
 
 ### 8.3 Real-Time Run Streaming
 
-When the Run Detail page loads a run with status `running`, it automatically connects to `GET /api/runs/:runId/stream` via `fetch()` + `ReadableStream` (the same SSE parsing pattern used by the Chat interface). This provides real-time observability of agent execution:
+When the Run Detail page loads a run with status `running`, it automatically connects to `GET /api/runs/:runId/stream` via `fetch()` + `ReadableStream`. This provides real-time observability of agent execution:
 
 - **Live Badge**: A green "Live" pill with a pulsing dot appears next to the status badge while the stream is active.
 - **Step Streaming**: Each `step` SSE event appends a new execution step to the timeline immediately, using the same step rendering components (reasoning, tool call, final output). The latest step receives a highlight treatment (green step number, fade-in animation).
@@ -403,83 +401,11 @@ When the Run Detail page loads a run with status `running`, it automatically con
 
 ---
 
-## 9. Chat / Session Views
-
-### 9.1 Session List
-
-**Route**: `/org/:name/chat`
-**API**: `GET /api/sessions?organization_scope=:name`
-**Polling**: Every 10 seconds.
-
-A list of session cards (not a table), displayed as a vertical stack. Each card shows:
-- Title (or "Untitled" if null).
-- Organization scope badge (or "Global").
-- Cost.
-- Created timestamp (relative).
-
-Clicking a card navigates to `/org/:name/chat/:id`.
-
-**Actions**:
-- **"New Chat"** button creates a session scoped to the current organization via `POST /api/sessions` and navigates to `/org/:name/chat/:id`. No scope selection dialog is shown — the session inherits the organization context from the current view.
-
-### 9.2 Chat Interface
-
-**Route**: `/org/:name/chat/:id`
-**API**: `GET /api/sessions/:id` (initial load), `POST /api/sessions/:id/messages` (send, SSE stream).
-
-The chat interface is a full-height, single-column view optimized for conversation.
-
-**Layout**:
-
-```
-┌──────────────────────────────────────────────────┐
-│  Chat: Bootstrap frontend org  │  Org: react_app │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│  ┌─ you ────────────────────────────────────┐    │
-│  │ I need an organization to build a React   │    │
-│  │ frontend with a Node backend.             │    │
-│  └──────────────────────────────────────────┘    │
-│                                                  │
-│  ┌─ assistant ──────────────────────────────┐    │
-│  │ Here's a proposed organizational          │    │
-│  │ structure...                               │    │
-│  └──────────────────────────────────────────┘    │
-│                                                  │
-│  ┌─ assistant (streaming...) ───────────────┐    │
-│  │ Let me think about the best...█           │    │
-│  └──────────────────────────────────────────┘    │
-│                                                  │
-├──────────────────────────────────────────────────┤
-│ ┌──────────────────────────────────────┤ Send ├─┐│
-│ │ Type a message...                              ││
-│ └────────────────────────────────────────────────┘│
-└──────────────────────────────────────────────────┘
-```
-
-**Header bar**: Session title (or "New Chat"), organization scope badge, cost for this session.
-
-**Message area**: Scrollable conversation history. Auto-scrolls to bottom on new messages. Messages are rendered as Markdown.
-- **User messages**: Left-aligned with "you" label, distinct background.
-- **Assistant messages**: Left-aligned with "assistant" label, distinct background.
-
-**Streaming behavior**:
-1. User types message and clicks Send (or presses Enter for single-line, Shift+Enter for newline).
-2. Input is disabled. A new assistant message bubble appears with a blinking cursor.
-3. The client uses `fetch()` with `ReadableStream` to consume the SSE response from the `POST` endpoint. (The native `EventSource` API only supports GET, so `fetch` is required here.)
-4. Each `token` event appends content to the streaming message bubble.
-5. On the `done` event, the final message replaces the streamed content (ensuring consistency), cost in the header updates, and the input is re-enabled.
-6. On network error, the streaming message is replaced with an error indicator and the input is re-enabled.
-
-**Input area**: A resizable textarea. Send button is disabled while streaming or when input is empty.
-
----
-
-## 10. Real-Time Updates — Polling Strategy
+## 9. Real-Time Updates — Polling Strategy
 
 The web app uses **polling via TanStack Query's `refetchInterval`** for all live data. There is no WebSocket connection.
 
-### 10.1 Polling Intervals
+### 9.1 Polling Intervals
 
 | View / Data | Interval | Rationale |
 |---|---|---|
@@ -491,21 +417,20 @@ The web app uses **polling via TanStack Query's `refetchInterval`** for all live
 | Agent detail | 10s | Agent profiles rarely change. |
 | Run detail (running) | 3s | Steps accumulate during execution. |
 | Run detail (terminal) | None | Terminal runs never change. |
-| Session list | 10s | Low urgency. |
 
-### 10.2 Polling Behavior
+### 9.2 Polling Behavior
 - **Tab visibility**: Polling is paused when the browser tab is not visible. TanStack Query's `refetchOnWindowFocus` handles revalidation on return.
 - **Stale-while-revalidate**: The UI always shows the last known data while a fresh fetch is in-flight. No loading spinners on refetch — only on initial load.
 - **Query deduplication**: Multiple components requesting the same data (e.g., sidebar footer and dashboard both reading `/api/status`) share a single query and single network request.
 
-### 10.3 Elapsed Time Timers
+### 9.3 Elapsed Time Timers
 For `in_progress` tasks, the `current_run_elapsed_seconds` value from the API seeds a client-side `setInterval` that increments every second. This avoids polling the API every second just for a timer. The timer resyncs on each API poll.
 
 ---
 
-## 11. UI Components — Reusable Building Blocks
+## 10. UI Components — Reusable Building Blocks
 
-### 11.1 Status Badge
+### 10.1 Status Badge
 A pill-shaped badge with color and icon per status:
 
 | Status | Color | Icon |
@@ -518,63 +443,63 @@ A pill-shaped badge with color and icon per status:
 
 Used for both task status and run status. Run statuses use the same color mapping: `running` = amber, `success` = green, `failed` = red, `preempted` = gray.
 
-### 11.2 Cost Display
+### 10.2 Cost Display
 Formats cost values consistently: `$0.00` for zero, `$0.04` for small values, `$12.47` for larger values. Always 2 decimal places. Monospace font for alignment in tables.
 
-### 11.3 Token Display
+### 10.3 Token Display
 Formats token counts with magnitude suffix: `482k` for thousands, `1.2M` for millions. Tooltip shows exact count.
 
-### 11.4 Relative Timestamp
+### 10.4 Relative Timestamp
 Displays "2m ago", "3h ago", "yesterday", etc. Tooltip shows the exact ISO timestamp. Updates every minute via a shared timer (not per-component interval).
 
-### 11.5 Agent Hierarchy Tree
+### 10.5 Agent Hierarchy Tree
 A recursive component rendering the nested agent array from `GET /api/organizations/:name`. Uses CSS indentation with connector lines. Each node is interactive (clickable to navigate to agent detail).
 
-### 11.6 Markdown Renderer
-Used for: task descriptions, comment bodies, agent instructions, assistant messages. Renders standard Markdown plus GFM tables and code blocks (with syntax highlighting via `shiki`). `@mentions` within rendered text are detected via regex and rendered as colored inline pills.
+### 10.6 Markdown Renderer
+Used for: task descriptions, comment bodies, agent instructions. Renders standard Markdown plus GFM tables and code blocks (with syntax highlighting via `shiki`). `@mentions` within rendered text are detected via regex and rendered as colored inline pills.
 
-### 11.7 @-Mention Autocomplete
+### 10.7 @-Mention Autocomplete
 A dropdown triggered by typing `@` in the comment input. Fetches the agent list for the task's organization. Filters as the user types. Inserts the selected name into the textarea. Keyboard-navigable (arrow keys + Enter).
 
-### 11.8 Confirmation Dialog
-A modal with a warning message and two buttons: "Cancel" and a destructive action button (red). Used for: Delete Organization, Remove Agent, Cancel Task. Includes specific context about what will be affected (e.g., "This will permanently delete organization 'react_app' and all 3 agents, 12 tasks, and 4 chat sessions.").
+### 10.8 Confirmation Dialog
+A modal with a warning message and two buttons: "Cancel" and a destructive action button (red). Used for: Delete Organization, Remove Agent, Cancel Task. Includes specific context about what will be affected (e.g., "This will permanently delete organization 'react_app' and all 3 agents and 12 tasks.").
 
-### 11.9 Empty State
-A centered illustration/icon with explanatory text and a primary action button. Used when: no organizations exist, no tasks match filters, no chat sessions exist.
+### 10.9 Empty State
+A centered illustration/icon with explanatory text and a primary action button. Used when: no organizations exist, no tasks match filters.
 
 ---
 
-## 12. Interactions & Microinteractions
+## 11. Interactions & Microinteractions
 
-### 12.1 Loading States
+### 11.1 Loading States
 - **Initial page load**: Skeleton placeholders (gray animated bars) in the shape of the expected content. No blank screens.
 - **Polling refetch**: No loading indicator. Stale data remains visible. A subtle "refreshing" dot animation in the page header is optional.
 - **Action in-flight** (e.g., creating a task): Button shows a spinner and is disabled. Form inputs are disabled.
 
-### 12.2 Optimistic Updates
+### 11.2 Optimistic Updates
 - **Comment submission**: The comment appears immediately in the timeline (with a subtle "sending" indicator) before the API responds. On error, the comment is removed and an error toast is shown.
 - **Task actions** (done, cancel, preempt, reopen): The status badge updates immediately. On error, it reverts.
 
-### 12.3 Error Handling
+### 11.3 Error Handling
 - **API errors (4xx)**: Displayed as inline messages near the relevant form field or as toast notifications for actions.
 - **Network errors**: A persistent banner at the top of the page: "Unable to reach the Sabbatical server. Is it running?" with a retry button. Appears after 3 consecutive failed polls.
 - **409 Conflict errors**: Displayed with specific guidance (e.g., "Cannot delete organization: task REAC-0003 is in progress. Preempt it first.").
 
-### 12.4 Transitions
+### 11.4 Transitions
 - **Page navigation**: Instant (no page-level transition animations). Content fades in subtly (150ms opacity transition).
 - **Expandable sections** (run steps, descriptions): Smooth height transition (200ms ease).
 - **Modal dialogs**: Fade + scale entrance (150ms), fade exit (100ms). Backdrop blur.
 - **Toast notifications**: Slide in from top-right, auto-dismiss after 5 seconds, manually dismissable.
 
-### 12.5 Keyboard Shortcuts
-- `n` — Open the "New" dialog for the current context (New Task on tasks page, New Chat on chat page).
+### 11.5 Keyboard Shortcuts
+- `n` — Open the "New" dialog for the current context (New Task on tasks page).
 - `Esc` — Close any open modal/dialog.
 
 ---
 
-## 13. Serving Strategy
+## 12. Serving Strategy
 
-### 13.1 Production: Bundled Static Files
+### 12.1 Production: Bundled Static Files
 
 The web app is built into static files (`index.html`, JS bundles, CSS) and served directly by the FastAPI server. This is the production/installed mode.
 
@@ -605,7 +530,7 @@ This means:
 
 **Build step**: The web app is built as part of the package build process. The `web/` directory at the project root contains the source. A build script (`npm run build` in `web/`) outputs to `src/sabbatical/web/dist/`. This directory is included in the Python package distribution.
 
-### 13.2 Development: Vite Dev Server + API Proxy
+### 12.2 Development: Vite Dev Server + API Proxy
 
 During development, the Vite dev server runs separately (e.g., on port 5173) with a proxy configuration that forwards `/api` requests to the running Sabbatical API server:
 
@@ -629,11 +554,11 @@ export default defineConfig({
 
 This provides hot module replacement during frontend development while using the real API backend.
 
-### 13.3 CORS
+### 12.3 CORS
 
 In production (static files served by FastAPI), CORS is not needed (same origin). In development, the Vite proxy handles the cross-origin issue transparently. No CORS middleware is required on the FastAPI server for web app support.
 
-### 13.4 Web App Source Location
+### 12.4 Web App Source Location
 
 ```
 web/
@@ -687,11 +612,6 @@ web/
     │   │   ├── RunStepReasoning.tsx
     │   │   ├── RunStepToolCall.tsx
     │   │   └── RunStepFinalOutput.tsx
-    │   └── chat/
-    │       ├── SessionList.tsx
-    │       ├── ChatInterface.tsx
-    │       ├── ChatMessage.tsx
-    │       └── ChatInput.tsx
     ├── context/
     │   ├── OrgContext.tsx            # Current org data provider
     │   └── SidebarContext.tsx        # Sidebar open/close state
@@ -701,8 +621,6 @@ web/
     │   ├── TasksPage.tsx
     │   ├── TaskDetailPage.tsx
     │   ├── RunDetailPage.tsx
-    │   ├── ChatListPage.tsx
-    │   └── ChatPage.tsx
     └── lib/
         ├── format.ts                # Cost, token, time formatting utilities
         ├── constants.ts             # Polling intervals, color mappings
@@ -713,25 +631,22 @@ web/
 
 ---
 
-## 14. Edge Cases & Constraints
+## 13. Edge Cases & Constraints
 
-### 14.1 Server Unavailable
+### 13.1 Server Unavailable
 When the API server is not running (detected after 3 consecutive failed polls to `GET /api/status`), the layout displays a persistent red banner at the top of the main content area: "Unable to reach the Sabbatical server. Is it running?" with a `sabbatical server up` command hint. Polling continues, and the banner disappears automatically when connectivity is restored.
 
-### 14.2 Stale Data After Action
+### 13.2 Stale Data After Action
 After any mutation (create, update, delete, task action), the relevant TanStack Query caches are invalidated to trigger an immediate refetch. For example, after `POST /api/tasks/:id/done`, both the task detail query and the task list query are invalidated.
 
-### 14.3 Concurrent CLI + Web Usage
+### 13.3 Concurrent CLI + Web Usage
 Since both clients are stateless REST consumers, there are no conflicts. The polling mechanism ensures the web app picks up changes made via the CLI within the polling interval (worst case: 3 seconds for actively-polled views).
 
-### 14.4 Long Task Timelines
+### 13.4 Long Task Timelines
 For tasks with many comments and runs, the timeline renders all entries directly. No virtualization is applied — timelines are expected to remain manageable in size for V1.
 
-### 14.5 Large Execution Steps
+### 13.5 Large Execution Steps
 Run execution steps with very long tool outputs (e.g., large file writes, verbose shell output) are truncated by default (500 characters) with an explicit "Show full output" toggle, matching the CLI's `--full` behavior.
 
-### 14.6 SSE Reconnection
-If the SSE stream for a chat message is interrupted (network hiccup), the UI shows the partial message received so far with an error indicator and a "Retry" button. The retry re-sends the original message to `POST /api/sessions/:id/messages`.
-
-### 14.7 Color Scheme
+### 13.6 Color Scheme
 The web app defaults to a **dark color scheme** (dark backgrounds, light text). This aligns with the developer-centric audience and reduces visual fatigue during monitoring. A light mode toggle is a future consideration but not in scope for V1.

@@ -1,7 +1,7 @@
 # Sabbatical — Product Vision & System Summary
 
 ## 1. What is Sabbatical?
-Sabbatical is a developer-centric tool for orchestrating specialized organizations of AI agents. It operates on a Client-Server architecture running locally on the developer's machine: a centralized, always-on **Local API Server** handles orchestration, state, and agent execution, while a **Thin CLI** and a **Web Application** act as human interfaces over HTTP.
+Sabbatical is a developer-centric tool for orchestrating specialized organizations of AI agents. It operates on a Client-Server architecture running locally on the developer's machine: a centralized, always-on **Local API Server** handles orchestration, state, and agent execution, while a **Thin CLI**, a **Web Application**, and an **MCP Server** act as interfaces over HTTP. The CLI and web app are human interfaces; the MCP server enables AI agents (Claude Code, Codex, Gemini, etc.) to interact with Sabbatical programmatically via the Model Context Protocol.
 
 ## 2. Core Concepts
 
@@ -29,6 +29,8 @@ Sabbatical is a developer-centric tool for orchestrating specialized organizatio
 * **Auto-Assignment to Root Agent** — When a task is created, it is automatically assigned to the organization's root agent (the agent with no Boss) and queued for dispatch. There is no option to create a task assigned to `user` — all tasks immediately enter the dispatch queue.
 * **OpenRouter Only (V1)** — All LLM calls route through the OpenRouter API (via `LiteLlm` from Google's Agent Development Kit for framework integration).
 * **Configuration** — Global config lives in `~/.sabbatical/config.toml` (API keys, model selection, concurrency limits, server settings).
+* **MCP Server** — An MCP (Model Context Protocol) server exposes the full Sabbatical API as tools over stdio transport. This allows any MCP-compatible AI agent to manage organizations, agents, tasks, and runs programmatically. The MCP server is a thin proxy — it forwards all requests to the running API Server over HTTP.
+* **Skill Document** — An agent-agnostic reference document (`SKILL.md`) provides the complete context needed for any AI agent to operate Sabbatical: core concepts, tool signatures, response shapes, and workflows. The skill works with both MCP tools and direct HTTP API access.
 
 ## 4. Reading Guide
 
@@ -42,3 +44,4 @@ Sabbatical is a developer-centric tool for orchestrating specialized organizatio
 | [API Endpoints](8_api_endpoints.md) | What are the HTTP endpoints? Request/response formats. |
 | [System Prompts](9_prompts.md) | What do agents see? Exact prompt definitions. |
 | [Web Application](10_web_app.md) | How does the browser-based UI work? Pages, components, real-time updates. |
+| [MCP & Skill](11_mcp_and_skill.md) | How do external AI agents interact with Sabbatical? MCP server architecture and the skill document. |
