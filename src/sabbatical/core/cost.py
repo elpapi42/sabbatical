@@ -1,4 +1,9 @@
+import logging
+
 import databases
+import litellm
+
+logger = logging.getLogger(__name__)
 
 
 async def sum_run_costs(db: databases.Database, **filters) -> dict:
@@ -37,5 +42,13 @@ async def system_total_cost(db: databases.Database) -> dict:
 
 
 def openrouter_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    # Future: parse from OpenRouter response header
-    return 0.0
+    try:
+        prompt_cost, completion_cost = litellm.cost_per_token(
+            model=f"openrouter/{model}",
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+        )
+        return prompt_cost + completion_cost
+    except Exception:
+        logger.warning("cost_per_token: no pricing data for model=%s, cost will be 0.0", model)
+        return 0.0

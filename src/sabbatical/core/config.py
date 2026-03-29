@@ -15,6 +15,7 @@ class DispatcherConfig(BaseModel):
     polling_interval_ms: int = 500
     max_concurrency: int = 4
     default_max_iterations: int = 50
+    max_run_duration_seconds: int = 1800  # 30 minutes; 0 = no timeout
 
 class LLMConfig(BaseModel):
     openrouter_api_key: str = ""
@@ -45,6 +46,7 @@ db_path = "{db_path}"
 polling_interval_ms = 500
 max_concurrency = 4
 default_max_iterations = 50
+max_run_duration_seconds = 1800
 
 [llm]
 openrouter_api_key = "{api_key}"

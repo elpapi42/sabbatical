@@ -13,7 +13,7 @@ from sabbatical.core.config import CONFIG_PATH, load_config
 from sabbatical.core.db import get_database
 from sabbatical.core.logging_setup import setup_logging
 from sabbatical.api.broadcast import RunEventBroadcaster
-from sabbatical.core.dispatcher import Dispatcher
+from sabbatical.core.dispatcher import Dispatcher, recover_interrupted_tasks
 from sabbatical.api.routers import (
     agents,
     organizations,
@@ -57,6 +57,10 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(run_migrations, config.server.db_path)
 
     db = await get_database(config.server.db_path)
+
+    recovered = await recover_interrupted_tasks(db)
+    if recovered:
+        logger.info("startup recovery: re-queued %d interrupted task(s)", recovered)
 
     broadcaster = RunEventBroadcaster()
     dispatcher = Dispatcher(db=db, config=config, broadcaster=broadcaster)

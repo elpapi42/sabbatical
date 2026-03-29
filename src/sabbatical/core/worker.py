@@ -17,6 +17,12 @@ class MaxIterationsExceeded(Exception):
         self.count = count
 
 
+class RunTimedOut(Exception):
+    def __init__(self, seconds: int):
+        self.seconds = seconds
+        super().__init__(f"Run timed out after {seconds}s")
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -108,63 +114,68 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
         step_count = 0
         iteration_count = 0
 
-        async for event in runner.run_async(
-            user_id="sabbatical",
-            session_id=session_id,
-            new_message=user_message,
-        ):
-            # Extract text from event content parts
-            text = ""
-            if event.content and event.content.parts:
-                text = "".join(
-                    p.text for p in event.content.parts if p.text
-                )
+        timeout_seconds = config.dispatcher.max_run_duration_seconds
+        try:
+            async with asyncio.timeout(timeout_seconds if timeout_seconds > 0 else None):
+                async for event in runner.run_async(
+                    user_id="sabbatical",
+                    session_id=session_id,
+                    new_message=user_message,
+                ):
+                    # Extract text from event content parts
+                    text = ""
+                    if event.content and event.content.parts:
+                        text = "".join(
+                            p.text for p in event.content.parts if p.text
+                        )
 
-            # Record reasoning text (even if the event also contains tool calls)
-            if text and not event.partial:
-                step_count += 1
-                logger.debug("llm step run_id=%s step=%d", run_id, step_count)
-                step_data = {
-                    "step": step_count,
-                    "type": "llm_reasoning",
-                    "content": text,
-                }
-                steps.append(step_data)
-                await _flush_steps(db, run_id, steps)
-                if broadcaster:
-                    broadcaster.publish(run_id, "step", step_data)
+                    # Record reasoning text (even if the event also contains tool calls)
+                    if text and not event.partial:
+                        step_count += 1
+                        logger.debug("llm step run_id=%s step=%d", run_id, step_count)
+                        step_data = {
+                            "step": step_count,
+                            "type": "llm_reasoning",
+                            "content": text,
+                        }
+                        steps.append(step_data)
+                        await _flush_steps(db, run_id, steps)
+                        if broadcaster:
+                            broadcaster.publish(run_id, "step", step_data)
 
-            # Record tool calls
-            for fc in event.get_function_calls():
-                step_count += 1
-                logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
-                step_data = {
-                    "step": step_count,
-                    "type": "tool_call",
-                    "tool": fc.name,
-                    "arguments": dict(fc.args) if fc.args else {},
-                }
-                steps.append(step_data)
-                await _flush_steps(db, run_id, steps)
-                if broadcaster:
-                    broadcaster.publish(run_id, "step", step_data)
+                    # Record tool calls
+                    for fc in event.get_function_calls():
+                        step_count += 1
+                        logger.debug("tool call run_id=%s step=%d tool=%s", run_id, step_count, fc.name)
+                        step_data = {
+                            "step": step_count,
+                            "type": "tool_call",
+                            "tool": fc.name,
+                            "arguments": dict(fc.args) if fc.args else {},
+                        }
+                        steps.append(step_data)
+                        await _flush_steps(db, run_id, steps)
+                        if broadcaster:
+                            broadcaster.publish(run_id, "step", step_data)
 
-            # Flush pending comments from add_comment tool
-            flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
-            if flushed_final is not None:
-                reply_text = flushed_final
+                    # Flush pending comments from add_comment tool
+                    flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
+                    if flushed_final is not None:
+                        reply_text = flushed_final
 
-            if event.usage_metadata and not event.partial:
-                total_input_tokens += event.usage_metadata.prompt_token_count or 0
-                total_output_tokens += event.usage_metadata.candidates_token_count or 0
-                iteration_count += 1
+                    if event.usage_metadata and not event.partial:
+                        total_input_tokens += event.usage_metadata.prompt_token_count or 0
+                        total_output_tokens += event.usage_metadata.candidates_token_count or 0
+                        iteration_count += 1
 
-            if iteration_count >= agent_row["max_iterations"]:
-                logger.warning(
-                    "max iterations exceeded run_id=%s task_id=%s limit=%d",
-                    run_id, task_id, agent_row["max_iterations"]
-                )
-                raise MaxIterationsExceeded(iteration_count)
+                    if iteration_count >= agent_row["max_iterations"]:
+                        logger.warning(
+                            "max iterations exceeded run_id=%s task_id=%s limit=%d",
+                            run_id, task_id, agent_row["max_iterations"]
+                        )
+                        raise MaxIterationsExceeded(iteration_count)
+        except asyncio.TimeoutError:
+            raise RunTimedOut(timeout_seconds)
 
         # Flush any remaining pending comments after the loop ends
         if thread_state:
@@ -254,6 +265,26 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             total_input_tokens,
             total_output_tokens,
             f"Max iterations reached ({e.count})",
+            model=model,
+        )
+        if broadcaster:
+            broadcaster.close(run_id)
+    except RunTimedOut as e:
+        minutes = e.seconds // 60
+        logger.warning(
+            "run timed out run_id=%s task_id=%s after=%ds", run_id, task_id, e.seconds
+        )
+        if thread_state:
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
+        await fail_run(
+            db,
+            run_id,
+            task_id,
+            steps,
+            total_input_tokens,
+            total_output_tokens,
+            f"Run timed out after {minutes}m (limit: {e.seconds}s). Use `agent edit` to raise max_run_duration_seconds.",
+            model=model,
         )
         if broadcaster:
             broadcaster.close(run_id)
@@ -283,7 +314,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
         if thread_state:
             await _flush_pending_comments(db, task_id, agent_name, thread_state)
         await fail_run(
-            db, run_id, task_id, steps, total_input_tokens, total_output_tokens, str(e)
+            db, run_id, task_id, steps, total_input_tokens, total_output_tokens, str(e), model=model,
         )
         if broadcaster:
             broadcaster.close(run_id)
@@ -309,20 +340,22 @@ def _sanitize_error(reason: str) -> str:
     return f"Agent execution failed — check `run view` for details. ({first_line})"
 
 
-async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason):
+async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason, model: str = ""):
     now = utc_now()
+    cost = openrouter_cost(model, in_tok, out_tok) if model else 0.0
     # Full error goes into execution steps (visible via `run view`)
     steps.append({"step": len(steps) + 1, "type": "fatal_error", "content": reason})
     await db.execute(
         """UPDATE runs
            SET status = 'failed', ended_at = :now,
                consumed_input_tokens = :in_tok, consumed_output_tokens = :out_tok,
-               execution_steps = :steps
+               total_cost = :cost, execution_steps = :steps
            WHERE id = :id""",
         {
             "now": now,
             "in_tok": in_tok,
             "out_tok": out_tok,
+            "cost": cost,
             "steps": json.dumps(steps),
             "id": run_id,
         },
