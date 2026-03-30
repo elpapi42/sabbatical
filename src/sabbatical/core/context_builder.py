@@ -3,6 +3,8 @@ from pathlib import Path
 
 from google.genai import types
 
+from sabbatical.core.operations.organizations import build_agent_tree
+
 logger = logging.getLogger(__name__)
 
 SYSTEM_RULES_TEMPLATE = """You are a specialized member of your organization, executing work on behalf of your team. Your instructions below define your identity — your expertise, your working style, your role in the hierarchy. Read them and inhabit that role fully.
@@ -82,19 +84,6 @@ If you hit a blocker you cannot resolve — a build failure, a missing dependenc
 Incomplete work explained clearly is far better than a confident-sounding message that hides a broken state."""
 
 
-def build_tree_dict(agents_list: list[dict]) -> list[dict]:
-    # Convert list of agent dicts to a nested tree of nodes
-    agent_map = {a["name"]: {**a, "subordinates": []} for a in agents_list}
-    roots = []
-    for a in agent_map.values():
-        boss = a.get("boss")
-        if boss and boss in agent_map:
-            agent_map[boss]["subordinates"].append(a)
-        else:
-            roots.append(a)
-    return roots
-
-
 def render_hierarchy_tree(nodes: list[dict], indent: int = 0) -> str:
     lines = []
     for node in nodes:
@@ -120,7 +109,7 @@ async def build_context_payload(db, config, agent, task, comments, org_name):
     )
 
     agent_dicts = [dict(r) for r in all_agents]
-    tree = build_tree_dict(agent_dicts)
+    tree = build_agent_tree(agent_dicts)
     tree_text = render_hierarchy_tree(tree)
 
     block_b = f"""## Organization: {org_name}

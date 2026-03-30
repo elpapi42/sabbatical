@@ -11,8 +11,10 @@ from fastapi.responses import FileResponse
 
 from sabbatical.core.config import CONFIG_PATH, load_config
 from sabbatical.core.db import get_database
+from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.logging_setup import setup_logging
 from sabbatical.api.broadcast import RunEventBroadcaster
+from sabbatical.api.routers._errors import core_error_handler
 from sabbatical.core.dispatcher import Dispatcher, recover_interrupted_tasks
 from sabbatical.api.routers import (
     agents,
@@ -81,6 +83,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Sabbatical", lifespan=lifespan)
+    app.add_exception_handler(SabbaticalError, core_error_handler)
     app.include_router(status.router, prefix="/api")
     app.include_router(organizations.router, prefix="/api")
     app.include_router(agents.router, prefix="/api")

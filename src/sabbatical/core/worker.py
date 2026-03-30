@@ -51,6 +51,21 @@ async def _flush_pending_comments(db, task_id, agent_name, thread_state):
     return final_message
 
 
+async def _heartbeat_and_check_cancel(db, run_id):
+    """Update heartbeat timestamp and check if cancellation was requested."""
+    now = utc_now()
+    await db.execute(
+        "UPDATE runs SET last_heartbeat = :now WHERE id = :run_id",
+        {"now": now, "run_id": run_id},
+    )
+    row = await db.fetch_one(
+        "SELECT cancel_requested FROM runs WHERE id = :run_id",
+        {"run_id": run_id},
+    )
+    if row and row["cancel_requested"]:
+        raise asyncio.CancelledError()
+
+
 async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, broadcaster=None):
     logger.info(
         "run start run_id=%s task_id=%s agent=%s org=%s",
@@ -111,6 +126,9 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             valid_route_targets=valid_route_targets,
         )
 
+        # Initial heartbeat so the run is visible as alive immediately
+        await _heartbeat_and_check_cancel(db, run_id)
+
         step_count = 0
         iteration_count = 0
 
@@ -167,6 +185,9 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
                         total_input_tokens += event.usage_metadata.prompt_token_count or 0
                         total_output_tokens += event.usage_metadata.candidates_token_count or 0
                         iteration_count += 1
+
+                    # Heartbeat + cooperative cancellation check
+                    await _heartbeat_and_check_cancel(db, run_id)
 
                     if iteration_count >= agent_row["max_iterations"]:
                         logger.warning(

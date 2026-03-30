@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import databases
 import sqlalchemy
 from sqlalchemy import (
@@ -144,6 +146,8 @@ runs = Table(
     Column("consumed_output_tokens", Integer, nullable=False, server_default="0"),
     Column("total_cost", Float, nullable=False, server_default="0.0"),
     Column("execution_steps", Text, nullable=False, server_default="[]"),
+    Column("last_heartbeat", String, nullable=True),
+    Column("cancel_requested", Integer, nullable=False, server_default="0"),
     CheckConstraint("status IN ('running', 'success', 'failed', 'preempted')"),
 )
 
@@ -158,6 +162,7 @@ class _PragmaPool:
         conn = await self._pool.acquire()
         await conn.execute("PRAGMA foreign_keys=ON")
         await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     async def release(self, connection):
@@ -175,3 +180,41 @@ async def get_database(db_path: str) -> databases.Database:
     backend = database._backend
     backend._pool = _PragmaPool(backend._pool)
     return database
+
+
+def _get_expected_revision() -> str:
+    """Read the expected Alembic head revision from the migration files."""
+    from alembic.config import Config as AlembicConfig
+    from alembic.script import ScriptDirectory
+
+    alembic_cfg = AlembicConfig()
+    alembic_cfg.set_main_option(
+        "script_location", str(Path(__file__).parent.parent / "migrations")
+    )
+    return ScriptDirectory.from_config(alembic_cfg).get_current_head()
+
+
+async def _check_schema_version(db: databases.Database) -> None:
+    """Verify the DB schema is up to date. Raises if migrations are pending."""
+    from sabbatical.core.exceptions import SchemaError
+
+    row = await db.fetch_one("SELECT version_num FROM alembic_version")
+    expected = _get_expected_revision()
+    if not row or row["version_num"] != expected:
+        await db.disconnect()
+        raise SchemaError(
+            "Database schema is outdated. Run `sabbatical server up` to apply migrations."
+        )
+
+
+async def get_database_from_config() -> databases.Database:
+    """Create a database connection using the default config path.
+
+    Used by CLI and MCP processes that connect directly to the DB
+    without going through the API server. Includes a schema version
+    check — raises if the DB is behind the expected Alembic revision.
+    """
+    config = load_config()
+    db = await get_database(config.server.db_path)
+    await _check_schema_version(db)
+    return db

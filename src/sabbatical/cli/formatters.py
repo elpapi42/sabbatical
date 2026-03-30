@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-import httpx
 import typer
 
 
@@ -51,25 +50,6 @@ def print_table(headers: list[str], rows: list[list[str]]):
     typer.echo("-|-".join(["-" * w for w in col_widths]))
     for row in rows:
         typer.echo(format_str.format(*row))
-
-
-def print_json_error(response: httpx.Response):
-    try:
-        data = response.json()
-        if "message" in data:
-            msg = data["message"]
-        elif "detail" in data:
-            detail = data["detail"]
-            if isinstance(detail, list):
-                msgs = [d.get("msg", str(d)) for d in detail]
-                msg = "; ".join(msgs)
-            else:
-                msg = str(detail)
-        else:
-            msg = "Unknown error"
-        typer.echo(f"Error ({response.status_code}): {msg}", err=True)
-    except Exception:
-        typer.echo(f"Error ({response.status_code}): {response.text}", err=True)
 
 
 def print_tree(agents: list[dict], indent=0):
