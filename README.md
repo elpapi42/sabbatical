@@ -1,160 +1,255 @@
 # Sabbatical
 
-**A local AI agent orchestration system built around async task collaboration — not chat sessions.**
+**Stop pair programming with AI. Start managing it.**
 
 ---
 
-Most people use AI by opening a chat window, typing a request, and waiting. The AI responds. You react. It's a conversation — synchronous, serial, one thing at a time. You're blocked until it finishes, and it's blocked until you respond.
+You open Claude Code. You type a request. You wait. It responds. You react. You wait again. For every task, you're stuck in a synchronous loop — blocked while it works, blocking it while you think.
 
-Sabbatical is a different model. You write a task spec. You assign it to an agent. The agent picks it up, does the work using real tools in your actual codebase, hands it off to another agent via an `@mention`, and those agents keep working until the task surfaces back to you — done, blocked, or ready for review. Meanwhile, you're working on something else.
+The workaround? More sessions. You open three Claude Code tabs, four Cursor windows, juggling contexts. Now you're a human load balancer — remembering which session is doing what, re-explaining context when one drifts, copy-pasting results between them. You traded one bottleneck for a coordination problem.
 
-It's the difference between pair programming on a video call and managing a team through tasks. The team model scales. The call doesn't.
+Sabbatical is a different model. You build a team of AI agents once — a lead developer, a backend specialist, a test writer, whatever your project needs. Then you dispatch tasks to them the same way a tech lead assigns tickets. The agents pick up work, collaborate through `@mentions`, hand off between specialists, and surface results when they're done, blocked, or ready for review.
+
+Meanwhile, you're doing what you're actually good at — planning the next initiative, reviewing a PR from another team, writing a design doc, scoping the next quarter. You're not context-switching between AI sessions. You're managing a team through tasks.
+
+It's the difference between juggling five chat windows and having a team that works from a backlog. One scales with you. The other scales against you.
+
+```
+You:          "Add idempotency keys to the charge endpoint. Assign to payments."
+
+lead_dev:      Scoped the work. Needs DB migration + handler logic. @backend_dev
+backend_dev:   Added idempotency_keys table, wrapped /charges POST in key check. @test_writer
+test_writer:   Tests passing for duplicate charge rejection and key expiry. @lead_dev
+lead_dev:      Reviewed. Looks good. @user
+
+You:          "How's the idempotency task?"
+Claude Code:  ✅ Done. 4 agent handoffs, 5 files changed, all tests passing.
+```
+
+Three agents. Zero interruptions. You were scoping the billing migration the whole time.
 
 ---
 
-## How It Works
+## 30-Second Setup
 
-Sabbatical runs a **local API server** on your machine. The server manages a **database-as-queue**: it continuously polls for tasks assigned to agents, spins up worker threads, runs agents against real tools (file reads, file writes, shell commands), and processes their output. There is no cloud dependency. Everything — the database, the agent workspace, the execution — lives on your machine.
+```bash
+pipx install sabbatical
+export OPENROUTER_API_KEY="sk-or-your-key"
+sabbatical server up
+```
 
-### The Core Concepts
+Connect your AI tool:
 
-**Organizations** are isolated workspaces. Each organization has a `workspace_path` (a directory on your machine) and a roster of agents. Agents in different organizations cannot interact.
+```bash
+# Claude Code
+claude mcp add sabbatical -- sabbatical mcp
+```
 
-**Agents** are stateless worker profiles defined by a `.md` instruction file. The instruction file is the agent's identity: its expertise, its working style, its persona. Agents don't persist state between executions — their only context is the task description and the comment thread.
+```json
+// Cursor, Windsurf, or any MCP client
+{
+  "mcpServers": {
+    "sabbatical": {
+      "command": "sabbatical",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
-**Tasks** are the unit of work. Each task has a title, a detailed description (the spec), a status, an assignee, and a **comment thread**. The thread is the shared memory of the task: every agent that works on it leaves a comment, and every future agent reads the full thread before picking up where the previous one left off.
-
-**The Comment Thread** is what makes multi-agent collaboration coherent. Agents can't see each other's internal reasoning or tool calls — those are private to each run. But they see every comment in the thread. When an agent hands off to another with `@agent_name`, the next agent receives the full thread context including that handoff message. No context is lost between agents.
-
-**The Dispatcher** is the always-on polling loop that drives everything. It claims dispatchable tasks atomically (preventing double-execution), spins up a worker thread per task, and processes the agent's final output to determine routing. It runs inside the API server — `server up` starts it, `server down` gracefully stops it.
-
-### The Handoff Protocol
-
-When an agent finishes its work, it writes a final message. That message becomes a permanent comment on the task thread. The system reads the **first valid `@tag`** in that message to determine where the task goes next:
-
-- `@agent_name` → task is routed to that agent, queued for dispatch
-- `@user` → task returns to you for review or input
-- No valid tag → task escalates to the agent's boss; if no boss, it goes to you
-
-This is how agents collaborate without you in the loop. A `lead_dev` agent can delegate a specific problem to a `frontend_dev`, who can hand the result back to `lead_dev` for review, who can then return it to `@user`. Three agents, zero interruptions for you.
-
-### The Hierarchy
-
-Agents can have a **boss** — another agent in the same organization. The hierarchy is informational, not restrictive: any agent can tag any other agent in the organization. But the hierarchy powers smart escalation: if an agent fails to route properly (no valid tag in its output), the dispatcher automatically escalates to its boss. This gives you a safety net and a natural review chain.
+That's it. Your AI tool now has 22 MCP operations to build teams, dispatch tasks, and monitor agents.
 
 ---
 
-## A Real Workflow
+## Build a Team in 60 Seconds
 
-You're building a React app. You have an organization `react_app` with three agents: `lead_dev` (root), `frontend_dev` (reports to `lead_dev`), and `test_writer` (reports to `lead_dev`).
-
-You write a task spec and kick it off:
+Organizations map to real team boundaries — a backend platform team, a payments squad, a mobile client team — each scoped to a codebase directory.
 
 ```bash
-sabbatical task create "Add dark mode toggle to the header" \
-  --organization react_app \
-  --description "Implement a dark/light mode toggle in the header component. Use Tailwind's dark: prefix classes. The toggle should persist preference in localStorage. Existing header is at src/components/Header.tsx." \
-  --assign lead_dev
+# Create an organization tied to your project
+sabbatical organization create payments \
+  --workspace-path ./payments-service \
+  --description "Payments service team — API, billing logic, Stripe integration"
+
+# Add agents with instruction files
+sabbatical agent add lead_dev \
+  --organization payments \
+  --instructions ./agents/lead_dev.md
+
+sabbatical agent add backend_dev \
+  --organization payments \
+  --instructions ./agents/backend_dev.md \
+  --boss lead_dev
+
+sabbatical agent add test_writer \
+  --organization payments \
+  --instructions ./agents/test_writer.md \
+  --boss lead_dev
 ```
 
-`lead_dev` picks it up. It reads the spec, inspects the codebase with `read_file` and `list_directory`, and decides this is UI work for `frontend_dev`. It writes a detailed handoff comment explaining the approach and tags `@frontend_dev`. You're not involved.
+Or just tell Claude Code: *"Set up a Sabbatical org for the payments service with a lead, a backend specialist, and a test writer."* It does it through MCP.
 
-`frontend_dev` picks up the task. It reads the thread — including `lead_dev`'s briefing — modifies `Header.tsx`, adds a `ThemeToggle` component, and updates the Tailwind config. It finishes and tags `@test_writer` with a summary of what was changed.
-
-`test_writer` reads the thread, understands the full context of what was built, and writes tests for the toggle behavior. It tags `@lead_dev` for a final review pass.
-
-`lead_dev` reviews everything, requests a small change via a comment, tags `@frontend_dev` again. `frontend_dev` makes the fix, tags `@lead_dev`. `lead_dev` approves and tags `@user`.
-
-You get a notification. You check the thread with `task view`, see the full history of what every agent did, review the code changes in your editor, and run `task done REAC-0012`.
-
-While all of that was happening, you were working on three other tasks.
+You build the team once. Then you feed it work — daily, across sprints, across initiatives.
 
 ---
 
-## The Assistant
+## Manage a Backlog, Not a Chat Session
 
-Sabbatical includes a conversational planning copilot — **The Assistant** — for when you want help structuring work before delegating it.
+This is where the model pays off. You're not dispatching one task and watching it. You're stacking work across teams like a tech lead.
 
 ```bash
-sabbatical chat new --organization react_app
+# Monday morning — queue up the week
+sabbatical task create "Add idempotency keys to charge endpoint" \
+  --organization payments \
+  --description "Wrap the /charges POST handler in idempotency logic..."
+
+sabbatical task create "Migrate webhook handler to async" \
+  --organization payments \
+  --description "The Stripe webhook handler is synchronous and blocking..."
+
+sabbatical task create "Add retry budget metrics to dashboard" \
+  --organization platform \
+  --description "Expose retry budget counters from the circuit breaker..."
 ```
 
-The Assistant knows your organization's agents and hierarchy. It helps you break down high-level goals into atomic tasks, writes detailed task specs that stateless agents can execute without ambiguity, and assigns tasks to the right agents. It can also bootstrap entire organizations from scratch — proposing agent names, hierarchies, and instruction files — if you're starting a new project.
+Three tasks, two teams. The agents pick them up, collaborate, hand off, and surface results — while you're in a design review for something else entirely. When you come back:
 
-The Assistant never executes technical work. It is a planning layer, not a worker. Workers are agents.
+```bash
+sabbatical task list --organization payments --status done
+sabbatical task list --organization platform --status open
+```
+
+This is the real value. Not "AI does your work while you nap." It's: **you can operate across multiple initiatives concurrently without the cognitive overhead of managing a dozen AI sessions.** The team structure absorbs that complexity. You manage tasks, not conversations.
 
 ---
 
-## Setup
+## How Agents Collaborate
 
-### Prerequisites
+There's no workflow engine. No DAG. No planner. Agents collaborate through a single, dead-simple protocol:
 
-- Python 3.12+
-- Poetry
-- An [OpenRouter](https://openrouter.ai) API key (Open to contributions to make more providers available, even Claude Code, Codex, Gemini adapters)
+**Every agent reads the full comment thread. Every agent ends with a `@mention`.**
 
-### Install
+- `@agent_name` → task routes to that agent
+- `@user` → task comes back to you
+- No valid tag → escalates to the agent's boss
 
-```bash
-git clone https://github.com/elpapi42/sabbatical.git
-cd sabbatical
-poetry install
+That's it. The comment thread is the shared memory. Each agent sees everything every previous agent wrote — but not their internal tool calls or reasoning. Context accumulates naturally, like a well-run async standup.
+
+The hierarchy is a safety net: if routing fails, the task escalates up the chain. If there's no boss, it lands on you. Nothing gets lost.
+
+---
+
+## What Makes an Agent
+
+An agent is a `.md` file. That's the whole identity — expertise, working style, who it collaborates with.
+
+```markdown
+# lead_dev
+
+You are the lead developer. You own code quality and architecture decisions.
+
+When a task arrives, understand the full scope first. Execute it yourself
+or delegate to the right specialist.
+
+Your team:
+- @backend_dev — Python, APIs, database logic, integrations
+- @test_writer — unit tests, integration tests, coverage
+
+When delegating, write a clear briefing: what you've already done, what
+you need, and any constraints. The next agent's only context is this thread.
 ```
 
-### Configure
+This file is injected into every run. The better your instructions, the better your team performs. Generic instructions produce generic agents.
 
-```bash
-export OPENROUTER_API_KEY="sk-or-your-key-here"
+---
+
+## How It Works Under the Hood
+
+At the center is a **core library** — organizations, agents, tasks, the dispatcher, the execution engine. Everything that makes Sabbatical work lives here. No network layer, no transport assumptions. Just the domain logic, a SQLite database, and agents running against your actual codebase.
+
+On top of that core, three interfaces serve different users:
+
+```
+         ┌──────────┐   ┌─────────────┐   ┌──────────────────┐
+         │   CLI    │   │ HTTP Server │   │   MCP Server     │
+         │          │   │             │   │                  │
+         │ terminal │   │ build tools │   │ connect AI tools │
+         │ users    │   │ on top      │   │ (Claude Code,    │
+         │          │   │             │   │  Cursor, etc.)   │
+         └────┬─────┘   └──────┬──────┘   └────────┬─────────┘
+              │                │                    │
+              ▼                ▼                    ▼
+         ┌───────────────────────────────────────────────┐
+         │              Sabbatical Core                  │
+         │                                               │
+         │  Organizations · Agents · Tasks · Comments    │
+         │  Dispatcher · Worker Threads · Execution      │
+         │                                               │
+         │  ┌───────────────────────────────────────┐    │
+         │  │           SQLite Database              │    │
+         │  └───────────────────────────────────────┘    │
+         └───────────────────────────────────────────────┘
 ```
 
-The config file is auto-generated at `~/.sabbatical/config.toml` on first run. Edit it to change the default model, concurrency limit, or server port.
+**The CLI** is for terminal-native developers who want direct control — create orgs, add agents, dispatch tasks, inspect runs.
 
-### Start the Server
+**The HTTP server** is for anyone building other tools on top of Sabbatical — dashboards, integrations, custom workflows.
 
-```bash
-poetry run sabbatical server up
-```
+**The MCP server** is for AI tools. It exposes the full Sabbatical API as 22 MCP operations over stdio, so Claude Code, Cursor, Windsurf, or any MCP-compatible agent can orchestrate your teams natively.
 
-The server starts in the background. The dispatcher begins polling immediately. Any tasks already queued in the database from a previous session are picked up automatically.
+All three interfaces are equal citizens. They all talk to the same core, the same database, the same dispatcher. Use whichever fits how you work — or all three.
 
-```bash
-poetry run sabbatical server status   # snapshot: task counts, active workers, total cost
-poetry run sabbatical server down     # graceful shutdown; active runs finish before stopping
-```
+**Database-as-queue.** The dispatcher polls SQLite directly. No in-memory event bus, no message broker. If the server crashes, you restart and it picks up where it left off. Zero recovery effort.
+
+**Stateless agents.** Every run is a fresh instance. Context comes entirely from the system prompt (agent instructions) and the task's comment thread. No hidden state, no drift.
+
+**OpenRouter for LLMs.** All agent calls route through [OpenRouter](https://openrouter.ai), so you can use any model. Agent runtime is built on [Google ADK](https://google.github.io/adk-docs/) with LiteLLM.
+
+**Real tools.** Agents read files, write files, and run shell commands against your actual codebase. This isn't a sandbox — it's your project directory.
+
+Everything stays local — the database, the workspace, the execution. No cloud dependency.
 
 ---
 
 ## CLI Reference
 
+### Server
+
+```bash
+sabbatical server up                  # start server + dispatcher
+sabbatical server status              # task counts, active workers, total cost
+sabbatical server down                # graceful shutdown
+```
+
 ### Organizations
 
 ```bash
-sabbatical organization create <name> --workspace-path <path> --description "<text>"
+sabbatical organization create <n> --workspace-path <path> --description "<text>"
 sabbatical organization list
-sabbatical organization view <name>       # hierarchy tree
-sabbatical organization delete <name>     # cascade deletes all agents, tasks, runs
+sabbatical organization view <n>
+sabbatical organization delete <n>
 ```
 
 ### Agents
 
 ```bash
-sabbatical agent add <name> --organization <org> --instructions <path.md>
-sabbatical agent add <name> --organization <org> --instructions <path.md> --boss <boss_name> --description "<one-liner>"
+sabbatical agent add <n> --organization <org> --instructions <path.md>
+sabbatical agent add <n> --organization <org> --instructions <path.md> --boss <boss>
 sabbatical agent list --organization <org>
-sabbatical agent view <name> --organization <org>
-sabbatical agent edit <name> --organization <org> --boss <name>
-sabbatical agent remove <name> --organization <org>   # soft-delete; history preserved
+sabbatical agent view <n> --organization <org>
+sabbatical agent edit <n> --organization <org> --boss <n>
+sabbatical agent remove <n> --organization <org>
 ```
 
 ### Tasks
 
 ```bash
-sabbatical task create "<title>" --organization <org> --assign <agent|user> --description "<spec>"
+sabbatical task create "<title>" --organization <org> --description "<spec>"
 sabbatical task list --organization <org> --status <open|in_progress|failed|done|canceled>
-sabbatical task view <id>                    # full thread: comments + run summaries interleaved
-sabbatical task comment <id> "<message>"     # @mention an agent to delegate/unblock
-sabbatical task preempt <id>                 # interrupt an in-progress task
-sabbatical task done <id>                    # you verify and close
+sabbatical task view <id>
+sabbatical task comment <id> "<message>"
+sabbatical task preempt <id>
+sabbatical task done <id>
 sabbatical task cancel <id>
 sabbatical task reopen <id>
 ```
@@ -162,96 +257,26 @@ sabbatical task reopen <id>
 ### Runs
 
 ```bash
-sabbatical run view <run-id>           # full step-by-step: tool calls, arguments, stdout/stderr
+sabbatical run view <run-id>
 sabbatical run list --task <id>
 ```
 
-### Chat (The Assistant)
-
-```bash
-sabbatical chat new [--organization <org>]
-sabbatical chat list
-sabbatical chat resume <session-id>
-```
-
 ---
 
-## Writing Agent Instructions
+## Prerequisites
 
-An agent's identity lives in a `.md` file referenced by `--instructions`. This file is its character sheet: who it is, what it knows, how it works. Write it as if describing a real team member.
-
-```markdown
-# lead_dev
-
-You are the lead developer for this project. You own overall code quality and architecture decisions.
-
-When a task comes to you, your first job is to understand the full scope, then either execute it yourself or break it into focused sub-problems and delegate to the right specialist on your team.
-
-Your team:
-- @frontend_dev — React, TypeScript, UI/UX
-- @test_writer — unit tests, integration tests, coverage
-
-When delegating, write a clear briefing in your handoff: what you've already done, what you need from them, and any constraints or decisions they should know about. The next agent's only context is this thread.
-```
-
-The instruction file is injected into every run as part of the agent's context. Keep it specific. Generic instructions produce generic agents.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  Local API Server                   │
-│                                                     │
-│  ┌─────────────┐    ┌────────────────────────────┐  │
-│  │  Dispatcher │    │     Worker Threads         │  │
-│  │  (polling   │───▶│  Agent + ADK Runner        │  │
-│  │   loop)     │    │  Tools: read/write/shell   │  │
-│  └─────────────┘    └────────────────────────────┘  │
-│         │                       │                   │
-│         ▼                       ▼                   │
-│  ┌──────────────────────────────────────────────┐   │
-│  │              SQLite Database                 │   │
-│  │  organizations · agents · tasks · comments   │   │
-│  │  runs · sessions                             │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
-              ▲
-              │ HTTP
-              ▼
-        ┌──────────┐
-        │ Thin CLI │  (sabbatical <command>)
-        └──────────┘
-```
-
-- **Database-as-queue**: no in-memory event bus. The dispatcher polls SQLite directly. Crash recovery is zero-effort — on `server up`, the dispatcher resumes polling and picks up any open tasks.
-- **LLM provider**: all calls route through [OpenRouter](https://openrouter.ai), giving you access to any model.
-- **Agent runtime**: built on [Google ADK](https://google.github.io/adk-docs/) with LiteLLM for model routing.
-- **Stateless workers**: each run is a fresh agent instance. Context is injected entirely through the system prompt and the task thread.
-
----
-
-## Development
-
-```bash
-# Generate a new DB migration after changing the schema
-poetry run alembic revision --autogenerate -m "describe_the_change"
-
-# Apply migrations manually
-poetry run alembic upgrade head
-```
-
-Migrations run automatically on `server up`. The database lives at `~/.sabbatical/sabbatical.db`.
+- Python 3.12+
+- An [OpenRouter](https://openrouter.ai) API key
+- Config auto-generates at `~/.sabbatical/config.toml` on first run
 
 ---
 
 ## Status
 
-Sabbatical is under active development. V1 is focused on establishing the core execution model: local multi-agent task collaboration with a stable state machine, real tool access, and cost tracking. Planned for future iterations: context window management (thread summarization), richer task decomposition primitives, and broader LLM provider support.
+V1 — active development. Core execution model is stable: local multi-agent task collaboration, real tool access, cost tracking. Coming next: context window management (thread summarization), task decomposition primitives, broader LLM provider support.
 
 ---
 
 ## Contributing
 
-Issues and PRs are welcome. If you're building something with Sabbatical or have feedback on the agent collaboration model, open a discussion.
+Issues and PRs welcome. If you're building with Sabbatical or have feedback on the collaboration model, [open a discussion](https://github.com/elpapi42/sabbatical/discussions).
