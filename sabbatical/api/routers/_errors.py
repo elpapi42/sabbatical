@@ -12,7 +12,8 @@ from sabbatical.core.exceptions import (
 )
 
 
-async def core_error_handler(request: Request, exc: SabbaticalError) -> JSONResponse:
+async def core_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, SabbaticalError)
     if isinstance(exc, NotFoundError):
         return JSONResponse(status_code=404, content={"message": str(exc)})
     if isinstance(exc, ConflictError):
