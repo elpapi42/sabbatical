@@ -2,7 +2,7 @@
 
 ## Organizations
 
-An isolated workspace where agents collaborate on tasks. Maps to a real project or team boundary, scoped to a directory on disk.
+An isolated workspace where agents collaborate on tasks. Maps to a real team boundary — a backend platform team, a payments squad, a mobile client team — scoped to a directory on disk.
 
 - **Name**: Unique `snake_case` identifier (e.g., `payments`, `backend_platform`). Reserved: `user`, `system`.
 - **Workspace path**: Absolute filesystem path. All agent file operations are sandboxed here.
@@ -21,21 +21,48 @@ A stateless AI worker defined entirely by a markdown instructions file. The file
 - **Max iterations**: LLM turn limit per run (default: 50). Circuit breaker for runaway execution.
 - **Model**: Optional LLM override (e.g., `google/gemini-2.5-flash`).
 
-**Hierarchy:** Agents form a tree via `boss` relationships. The topmost agent (no boss) is the **root agent** — new tasks are auto-assigned to it. An organization must have at least one root agent before tasks can be created.
+**Hierarchy:** Agents form a tree (or forest) via `boss` relationships. The hierarchy is critical to how Sabbatical works:
+
+- **Root agents** (no boss) are the entry points for tasks. When a task is created, it auto-assigns to one of the organization's root agents. Root agents are the team's decision-makers — they scope work, triage, delegate to specialists, and review results before returning them to the user. An organization can have multiple root agents; tasks are distributed among them automatically.
+- **Specialists** report to a root agent (or to another specialist). They have distinct, non-overlapping expertise. Their instructions should explain their specialty and list the other agents they collaborate with.
+- Without root agents that triage, tasks don't get the scoping step that makes multi-agent collaboration work. A flat set of peer agents with no hierarchy will produce uncoordinated, redundant work.
+
+An organization must have at least one root agent before tasks can be created.
 
 Removing an agent is a **soft-delete**: it's preserved for history and its subordinates are promoted to root.
 
 ## Tasks
 
-The unit of work. Created with a title and organization; auto-assigned to the root agent and queued for dispatch.
+A task is a **goal for the team**, not a work item for a single agent.
 
-**Task IDs** are auto-generated from the org name:
+When you create a task, it auto-assigns to a root agent and enters the dispatch queue. The root agent reads the spec, decides how to approach it, and either handles it directly or delegates to a specialist via `@mention`. That specialist does their part and hands off to the next agent. The task flows through the team — each agent contributes from their unique expertise — until someone tags `@user` to say the work is ready for review.
+
+This means every task should be written so that **multiple agents have a reason to contribute**. The root agent scopes it, the specialist implements it, the test writer validates it, the root agent reviews it. If a task only makes sense for one agent, it's too narrow.
+
+### Good vs Bad Tasks
+
+**Good — describes an outcome the team can work toward:**
+- "Add idempotency keys to the charge endpoint so duplicate POST requests don't create duplicate charges"
+- "Migrate the webhook handler from synchronous to async processing"
+- "Add comprehensive error handling to the payment flow — surface clear error messages to the client and log structured errors for debugging"
+
+**Bad — step-level instructions for one agent:**
+- "Change line 94 in handler.py to add the idempotency check"
+- "backend_dev: write the migration file for the idempotency_keys table"
+- "Run the test suite and fix any failures"
+
+**Bad — tasks manually routed to a specific agent after creation:**
+- Creating a task and immediately adding a comment with `@backend_dev` to bypass the root agent's triage step
+
+### Task IDs
+
+Auto-generated from the org name:
 - Single-word org: first 4 chars uppercased → `SABB-0001`
 - Multi-word org: initials (padded to 4) → `my_cool_project` → `MCP-0001`
 
 IDs increment per org: `XXXX-0001`, `XXXX-0002`, …
 
-**Statuses:**
+### Statuses
 
 ```
 create_task ──► open (assigned to root agent, queued)
@@ -59,7 +86,7 @@ cancel_task ──► canceled (irreversible, from any non-terminal state)
 
 ## Runs
 
-One execution attempt of a task by an agent. A task may have multiple runs (e.g., after retries).
+One execution attempt of a task by an agent. A task typically has **multiple runs** — one per agent handoff — not just retries. For example: `lead_dev` runs first (scoping), hands off to `backend_dev` (implementation), who hands off to `test_writer` (testing), who hands off back to `lead_dev` (review). That's four runs on a single task, and that's normal.
 
 **Run statuses:** `running`, `success`, `failed`, `preempted`
 
@@ -71,7 +98,9 @@ One execution attempt of a task by an agent. A task may have multiple runs (e.g.
 
 ## Comments
 
-Append-only messages on the task thread. The primary mechanism for steering work between agents.
+Append-only messages on the task thread. The primary mechanism for collaboration between agents and communication with the user.
+
+The comment thread is the team's shared memory. Every agent reads the full thread before starting work, so context accumulates naturally across handoffs. Each agent sees what every previous agent wrote — but not their internal tool calls or reasoning.
 
 **Routing via @mentions:**
 - `@agent_name` in a comment body reassigns the task to that agent and re-queues it

@@ -76,7 +76,7 @@ class Dispatcher:
         max_conc = self._config.dispatcher.max_concurrency
 
         # DB-driven concurrency check: count runs with a recent heartbeat
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=60)).strftime(
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
         row = await self._db.fetch_one(
@@ -161,10 +161,10 @@ class Dispatcher:
         """Detect and recover runs whose heartbeat has gone stale.
 
         A run is considered orphaned when it has status='running' but its
-        last_heartbeat is older than 60 seconds. This catches workers that
-        crashed without cleaning up.
+        last_heartbeat is older than the configured orphan timeout. This
+        catches workers that crashed without cleaning up.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=60)).strftime(
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
         rows = await self._db.fetch_all(

@@ -4,6 +4,8 @@ All Sabbatical functionality is exposed through 22 MCP tools. The MCP server con
 
 **Always use these MCP tools.** Do not use the CLI or HTTP API.
 
+**Confirm before mutating.** Never call create, update, delete, cancel, or complete operations without explicit user approval. Read-only operations (get, list) don't need confirmation.
+
 ---
 
 ## Status
@@ -51,7 +53,7 @@ Get organization details including the full agent hierarchy tree.
 ---
 
 ### `create_organization`
-Create a new organization.
+Create a new organization. **Confirm with the user first.**
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
@@ -59,12 +61,12 @@ Create a new organization.
 | `workspace_path` | string | Yes | Absolute directory path. |
 | `description` | string | No | Purpose statement. |
 
-Creating an organization does **not** create agents — add them separately.
+Creating an organization does **not** create agents — add them separately. Always design the team structure with the user before creating anything.
 
 ---
 
 ### `update_organization`
-Update workspace path or description.
+Update workspace path or description. **Confirm with the user first.**
 
 | Parameter | Type | Required |
 |---|---|---|
@@ -77,7 +79,7 @@ At least one of `workspace_path` or `description` must be provided.
 ---
 
 ### `delete_organization`
-Delete an organization and all its agents, tasks, and runs. **Irreversible.**
+Delete an organization and all its agents, tasks, and runs. **Irreversible. Always confirm with the user.**
 
 | Parameter | Type | Required |
 |---|---|---|
@@ -114,7 +116,7 @@ Get agent details including instructions content and subordinates.
 ---
 
 ### `create_agent`
-Create a new agent.
+Create a new agent. **Confirm with the user first.** Always create as part of a team structure — not as a one-off for a single task.
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
@@ -125,12 +127,14 @@ Create a new agent.
 | `max_iterations` | integer | No | LLM turn limit (default: 50) |
 | `model` | string | No | LLM model override (e.g., `google/gemini-2.5-flash`) |
 
+The first agent created without a boss becomes a root agent — an entry point for tasks. An organization can have multiple root agents; tasks are distributed among them automatically. Specialists should always have a boss.
+
 If an agent with the same name was previously soft-deleted, it is reactivated.
 
 ---
 
 ### `update_agent`
-Update agent configuration. Only provided fields change.
+Update agent configuration. Only provided fields change. **Confirm with the user first.**
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
@@ -146,7 +150,7 @@ Agent must not be assigned to any `in_progress` tasks.
 ---
 
 ### `remove_agent`
-Soft-delete an agent. Subordinates are promoted to root.
+Soft-delete an agent. Subordinates are promoted to root. **Confirm with the user first.**
 
 | Parameter | Type | Required |
 |---|---|---|
@@ -184,13 +188,15 @@ Get full task details including description and timeline.
 ---
 
 ### `create_task`
-Create a new task. Auto-assigned to the root agent and queued for dispatch.
+Create a new task. Auto-assigned to a root agent and queued for dispatch. **Confirm with the user first.**
 
 | Parameter | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | Yes | |
 | `organization` | string | Yes | |
 | `description` | string | No | Defaults to title if omitted |
+
+Write tasks as team-level goals, not single-agent instructions. The root agent will triage and route — do not immediately `add_comment` with `@agent_name` to bypass this.
 
 **Returns:** Full task detail.
 
@@ -208,6 +214,8 @@ Add a comment to a task. Use `@agent_name` or `@user` in the body to route.
 
 Task must not be `in_progress`, `done`, or `canceled`.
 
+**Use for intervention only** — redirecting an existing task when the user wants to correct course. Not for initial assignment of freshly created tasks.
+
 ---
 
 ### `preempt_task`
@@ -222,7 +230,7 @@ Task must be `in_progress`.
 ---
 
 ### `complete_task`
-Mark a task as done. Only works on `open`/`failed` tasks assigned to `user`.
+Mark a task as done. Only works on `open`/`failed` tasks assigned to `user`. **Confirm with the user first** — they should review the timeline before closing.
 
 | Parameter | Type | Required |
 |---|---|---|
@@ -250,7 +258,7 @@ Retry a `done` or `failed` task. Re-queues it for agent execution.
 ---
 
 ### `cancel_task`
-Cancel a task. **Irreversible.**
+Cancel a task. **Irreversible. Always confirm with the user.**
 
 | Parameter | Type | Required |
 |---|---|---|

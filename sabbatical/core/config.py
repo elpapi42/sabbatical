@@ -45,6 +45,7 @@ class DispatcherConfig(BaseModel):
     max_concurrency: int = 4
     default_max_iterations: int = 50
     max_run_duration_seconds: int = 1800  # 30 minutes; 0 = no timeout
+    orphan_timeout_seconds: int = 300  # 5 minutes; heartbeats can gap during long LLM calls
 
 class LLMConfig(BaseModel):
     openrouter_api_key: str = ""

@@ -232,7 +232,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                SET status = 'success', ended_at = :now,
                    consumed_input_tokens = :in_tok, consumed_output_tokens = :out_tok,
                    total_cost = :cost, execution_steps = :steps
-               WHERE id = :id""",
+               WHERE id = :id AND status = 'running'""",
             {
                 "now": utc_now(),
                 "in_tok": total_input_tokens,
@@ -242,6 +242,18 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 "id": run_id,
             },
         )
+
+        # Check if the update applied — if the run was already marked failed
+        # by orphan detection, the WHERE clause won't match
+        run_check = await db.fetch_one(
+            "SELECT status FROM runs WHERE id = :id", {"id": run_id}
+        )
+        if run_check and run_check["status"] != "success":
+            logger.warning(
+                "run %s was marked '%s' by orphan detection before worker finished — skipping routing",
+                run_id, run_check["status"],
+            )
+            return
 
         logger.info(
             "run complete run_id=%s steps=%d input_tokens=%d output_tokens=%d cost=%.6f",
