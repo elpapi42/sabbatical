@@ -1,5 +1,8 @@
 import asyncio
+import importlib.resources
 import os
+import shutil
+from pathlib import Path
 
 import typer
 
@@ -88,6 +91,24 @@ def status():
         f"Tokens: In={data['consumed_input_tokens']} Out={data['consumed_output_tokens']}"
     )
     typer.echo(f"Total Cost: ${data['total_cost']:.2f}")
+
+
+@app.command()
+def install_skill(
+    path: Path = typer.Option(
+        ".", "--path", "-p", help="Target directory (SKILL.md will be written to <path>/sabbatical/SKILL.md)"
+    ),
+):
+    """Install the Sabbatical SKILL.md file to a target directory."""
+    dest_dir = path.resolve() / "sabbatical"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "SKILL.md"
+
+    source = importlib.resources.files("sabbatical.skill").joinpath("SKILL.md")
+    with importlib.resources.as_file(source) as src_path:
+        shutil.copy2(src_path, dest)
+
+    typer.echo(f"Installed {dest}")
 
 
 @app.command()
