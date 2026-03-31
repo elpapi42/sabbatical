@@ -3,19 +3,16 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from alembic import command as alembic_command
-from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from sabbatical.core.config import CONFIG_PATH, load_config
-from sabbatical.core.db import get_database
+from sabbatical.core.config import load_config
+from sabbatical.core.context import open_db_unchecked
+from sabbatical.core.daemon import ensure_dispatcher
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.logging_setup import setup_logging
-from sabbatical.api.broadcast import RunEventBroadcaster
 from sabbatical.api.routers._errors import core_error_handler
-from sabbatical.core.dispatcher import Dispatcher, recover_interrupted_tasks
 from sabbatical.api.routers import (
     agents,
     organizations,
@@ -24,60 +21,20 @@ from sabbatical.api.routers import (
     tasks,
 )
 
-# Migrations directory is bundled inside the package at sabbatical/migrations/
-_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-
-
-def run_migrations(db_path: str):
-    alembic_cfg = AlembicConfig()
-    alembic_cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
-    alembic_command.upgrade(alembic_cfg, "head")
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = load_config()
 
-    # Setup logging before anything else
-    setup_logging(config.logging.level, config.logging.file)
+    setup_logging(config.logging.level, config.logging.api_file)
     logger = logging.getLogger(__name__)
 
-    if not config.llm.openrouter_api_key:
-        logger.error("OPENROUTER_API_KEY is not configured in %s", str(CONFIG_PATH))
-        raise SystemExit("Missing openrouter_api_key in config. Set it in ~/.sabbatical/config.toml")
+    await asyncio.to_thread(ensure_dispatcher)
 
-    logger.info(
-        "server starting host=%s port=%d db=%s model=%s",
-        config.server.host,
-        config.server.port,
-        config.server.db_path,
-        config.llm.default_model,
-    )
-
-    # Run migrations in a thread to avoid blocking the async event loop
-    await asyncio.to_thread(run_migrations, config.server.db_path)
-
-    db = await get_database(config.server.db_path)
-
-    recovered = await recover_interrupted_tasks(db)
-    if recovered:
-        logger.info("startup recovery: re-queued %d interrupted task(s)", recovered)
-
-    broadcaster = RunEventBroadcaster()
-    dispatcher = Dispatcher(db=db, config=config, broadcaster=broadcaster)
-    dispatcher_task = asyncio.create_task(dispatcher.run_loop())
-
-    app.state.db = db
-    app.state.config = config
-    app.state.dispatcher = dispatcher
-    app.state.broadcaster = broadcaster
-
-    yield
-
-    dispatcher.shutdown()
-    await dispatcher_task
-    await db.disconnect()
+    async with open_db_unchecked(config.server.db_path) as db:
+        app.state.db = db
+        app.state.config = config
+        yield
     logger.info("server shutdown complete")
 
 

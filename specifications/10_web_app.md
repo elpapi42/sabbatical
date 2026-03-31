@@ -35,7 +35,7 @@ The web app covers all public API endpoints except `POST /api/shutdown`. Every C
 | Routing | React Router v7 | Client-side routing with URL-driven views. |
 | Styling | Tailwind CSS v4 | Utility-first, rapid iteration, consistent design tokens. |
 | State Management | TanStack Query (React Query) v5 | Server-state caching, automatic refetching (polling), optimistic updates, stale-while-revalidate. |
-| SSE Client | Native `EventSource` / `fetch` with `ReadableStream` | Minimal dependency; the run streaming endpoint uses standard SSE. |
+| HTTP Client | Native `fetch` | Standard browser API for REST calls. |
 | Icons | Lucide React | Lightweight, consistent icon set. |
 | Markdown Rendering | `react-markdown` + `remark-gfm` | Agent outputs often contain Markdown. |
 | Code Highlighting | `shiki` | Syntax highlighting for code blocks in run execution steps and agent output. |
@@ -389,15 +389,13 @@ Runs are surfaced inline in the task timeline as run summary cards (Section 7.2)
 
 **Step Number**: Each step displays its ordinal number (`Step 1`, `Step 2`, ...) in a left-margin gutter, connected by a vertical line (like a Git commit graph) to provide visual sequencing.
 
-### 8.3 Real-Time Run Streaming
+### 8.3 Live Run Updates
 
-When the Run Detail page loads a run with status `running`, it automatically connects to `GET /api/runs/:runId/stream` via `fetch()` + `ReadableStream`. This provides real-time observability of agent execution:
+When the Run Detail page loads a run with status `running`, the `useRun` hook polls the REST API at 3-second intervals (`POLL_FAST`) to fetch updated execution steps. Polling stops automatically when the run reaches a terminal status.
 
-- **Live Badge**: A green "Live" pill with a pulsing dot appears next to the status badge while the stream is active.
-- **Step Streaming**: Each `step` SSE event appends a new execution step to the timeline immediately, using the same step rendering components (reasoning, tool call, final output). The latest step receives a highlight treatment (green step number, fade-in animation).
-- **Stream Completion**: On the `done` SSE event, the stream closes and the page invalidates its TanStack Query cache to fetch the final run state from the REST API.
-- **Fallback**: The existing 3-second polling via `useRun()` continues as a safety net. If the SSE connection fails or drops, the polling catches up automatically. No explicit reconnection logic is needed.
-- **Multiple Tabs**: The backend supports multiple simultaneous subscribers per run, so multiple browser tabs can observe the same run.
+- **Live Badge**: A green "Live" pill with a pulsing dot appears next to the status badge while `run.status === "running"`.
+- **Step Updates**: Each poll fetches the full `execution_steps` array from the REST API. New steps appear in the timeline using the same step rendering components (reasoning, tool call, final output).
+- **No SSE**: The web app does not use Server-Sent Events. All live data comes through REST polling via TanStack Query's `refetchInterval`.
 
 ---
 
@@ -625,8 +623,7 @@ web/
         ├── format.ts                # Cost, token, time formatting utilities
         ├── constants.ts             # Polling intervals, color mappings
         ├── hooks.ts                 # Shared custom hooks (useElapsedTimer, etc.)
-        ├── orgLinks.ts              # Helper for generating org-scoped URLs
-        └── useRunStream.ts          # SSE hook for real-time run step streaming
+        └── orgLinks.ts              # Helper for generating org-scoped URLs
 ```
 
 ---

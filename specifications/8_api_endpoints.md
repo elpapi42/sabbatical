@@ -757,40 +757,6 @@ Get full execution details of a run.
 |---|---|
 | 404 | Run does not exist. |
 
-### `GET /api/runs/:id/stream`
-Stream execution steps for a run in real-time via Server-Sent Events (SSE).
-
-**Behavior**:
-- If the run status is `running`, the endpoint subscribes to the in-memory broadcast channel and streams events as they occur. The stream closes when the run completes, fails, or is preempted.
-- If the run status is terminal (`success`, `failed`, `preempted`), the endpoint replays all stored execution steps as a burst of `step` events followed by a `done` event, then closes.
-
-**SSE Event Types**:
-
-| Event | Payload | Description |
-|---|---|---|
-| `step` | `ExecutionStep` object (`step`, `type`, `content`, `tool`, `arguments`) | A new execution step was recorded. |
-| `done` | `{ "status": "success"\|"failed"\|"preempted", "total_cost": float, "consumed_input_tokens": int, "consumed_output_tokens": int }` | Run reached a terminal state. Stream closes after this event. |
-
-**Example SSE Stream**:
-```
-event: step
-data: {"step": 1, "type": "llm_reasoning", "content": "I'll start by reading the existing code..."}
-
-event: step
-data: {"step": 2, "type": "tool_call", "tool": "file_read", "arguments": {"path": "src/main.py"}}
-
-event: step
-data: {"step": 3, "type": "final_output", "content": "Done. I've updated the module. @user"}
-
-event: done
-data: {"status": "success", "total_cost": 0.042, "consumed_input_tokens": 3200, "consumed_output_tokens": 890}
-```
-
-**Errors**
-| Status | Condition |
-|---|---|
-| 404 | Run does not exist. |
-
 ---
 
 ## 7. Endpoint Summary
@@ -820,4 +786,3 @@ data: {"status": "success", "total_cost": 0.042, "consumed_input_tokens": 3200, 
 | `POST` | `/api/tasks/:id/cancel` | `task cancel` |
 | `GET` | `/api/tasks/:task_id/runs` | `run list` |
 | `GET` | `/api/runs/:id` | `run view` |
-| `GET` | `/api/runs/:id/stream` | SSE stream of execution steps |

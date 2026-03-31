@@ -50,11 +50,11 @@ async def recover_interrupted_tasks(db) -> int:
 
 
 class Dispatcher:
-    def __init__(self, db, config, broadcaster=None):
+    def __init__(self, db, config):
         self._db = db
         self._config = config
-        self._broadcaster = broadcaster
         self._shutdown_event = asyncio.Event()
+        self._worker_tasks: set[asyncio.Task] = set()
 
     def shutdown(self):
         self._shutdown_event.set()
@@ -144,8 +144,7 @@ class Dispatcher:
             task_id, agent_name, org_name, run_id
         )
 
-        # Fire and forget — the worker owns its own lifecycle from here
-        asyncio.create_task(
+        task = asyncio.create_task(
             run_agent_worker(
                 db=self._db,
                 config=self._config,
@@ -153,9 +152,10 @@ class Dispatcher:
                 run_id=run_id,
                 agent_name=agent_name,
                 org_name=org_name,
-                broadcaster=self._broadcaster,
             )
         )
+        self._worker_tasks.add(task)
+        task.add_done_callback(self._worker_tasks.discard)
 
     async def _check_stuck_runs(self):
         """Detect and recover runs whose heartbeat has gone stale.
@@ -204,14 +204,21 @@ class Dispatcher:
             )
 
     async def _graceful_shutdown(self):
-        """Request cancellation of all running workers and exit.
+        """Request cancellation of all running workers and drain.
 
-        Sets cancel_requested on all running runs. Workers will pick this up
-        on their next heartbeat check and self-terminate. If the process exits
-        before they do, recover_interrupted_tasks handles cleanup on next startup.
+        Sets cancel_requested on all running runs. Workers check this on each
+        heartbeat and self-terminate. Waits up to 30s for workers to finish.
         """
         logger.info("dispatcher shutting down — requesting cancellation of all running runs")
         await self._db.execute(
             "UPDATE runs SET cancel_requested = 1 WHERE status = 'running'"
         )
+        if self._worker_tasks:
+            logger.info("waiting for %d worker(s) to drain (30s timeout)", len(self._worker_tasks))
+            done, pending = await asyncio.wait(self._worker_tasks, timeout=30)
+            if pending:
+                logger.warning(
+                    "%d worker(s) did not finish in time — they will be recovered on next startup",
+                    len(pending),
+                )
         logger.info("dispatcher shutdown complete")

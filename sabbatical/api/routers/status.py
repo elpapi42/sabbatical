@@ -24,7 +24,6 @@ def _stop_server():
 
 @router.post("/shutdown")
 async def shutdown(request: Request):
-    """Trigger graceful server shutdown."""
-    request.app.state.dispatcher.shutdown()
+    """Trigger graceful API server shutdown. The dispatcher continues running."""
     asyncio.get_event_loop().call_later(1.0, _stop_server)
-    return {"message": "Shutting down"}
+    return {"message": "API server shutting down. Dispatcher continues running."}

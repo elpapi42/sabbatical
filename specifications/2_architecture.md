@@ -65,10 +65,8 @@ All agents share a static, hardcoded tool set. Tools are not configurable per ag
 ### Synchronous REST API
 All standard CLI commands mapping to Organization, Agent, Task, and Run management are executed as standard REST API calls (e.g., `POST /api/tasks`, `GET /api/organizations/:name`).
 
-### Real-Time Streaming
-The API Server exposes a streaming endpoint via Server-Sent Events (SSE):
-
-1. **Run Execution Streaming** — `GET /api/runs/:id/stream` streams execution steps (reasoning, tool calls, final output) in real-time as an agent worker processes a task. The worker publishes events to an in-memory `RunEventBroadcaster` (asyncio-based pub/sub), and the SSE endpoint subscribes to the relevant channel. Multiple clients can observe the same run simultaneously. For completed runs, the endpoint replays stored steps as a burst.
+### Real-Time Updates
+The web frontend polls `GET /api/runs/:id` at 3-second intervals while a run is active to get updated execution steps. There is no SSE or WebSocket streaming — all live data flows through REST polling via TanStack Query's `refetchInterval`.
 
 ## 5. LLM Provider
 The first release exclusively supports the **OpenRouter API** as the LLM provider. All LLM calls from agent worker threads are routed through OpenRouter. The system uses **Google's Agent Development Kit (ADK)** with the `LiteLlm` model adapter, which prefixes the configured model identifier with `openrouter/` to route through OpenRouter's unified API. Model selection is configured globally via the configuration file (default: `minimax/minimax-m2.7`, overridable per agent).

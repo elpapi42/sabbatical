@@ -203,7 +203,7 @@ async def _check_schema_version(db: databases.Database) -> None:
     if not row or row["version_num"] != expected:
         await db.disconnect()
         raise SchemaError(
-            "Database schema is outdated. Run `sabbatical server up` to apply migrations."
+            "Database schema is outdated. The dispatcher will run migrations on next startup."
         )
 
 

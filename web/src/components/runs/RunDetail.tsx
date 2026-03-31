@@ -1,7 +1,6 @@
 import { Link } from "react-router";
 import { useRun } from "@/api/queries";
 import { useOrgLinks } from "@/lib/orgLinks";
-import { useRunStream } from "@/lib/useRunStream";
 import StatusBadge from "@/components/shared/StatusBadge";
 import CostDisplay from "@/components/shared/CostDisplay";
 import TokenDisplay from "@/components/shared/TokenDisplay";
@@ -19,20 +18,14 @@ interface Props {
 export default function RunDetail({ runId, taskId }: Props) {
   const { data: run, isLoading } = useRun(runId);
   const links = useOrgLinks();
-  const { streamedSteps, isStreaming } = useRunStream(
-    runId,
-    run?.status === "running",
-  );
 
   if (isLoading || !run) return <PageSkeleton variant="detail" />;
 
-  const steps =
-    isStreaming && streamedSteps.length > 0
-      ? streamedSteps
-      : run.execution_steps;
+  const steps = run.execution_steps;
   const reasoningCount = steps.filter(
     (s) => s.type === "llm_reasoning",
   ).length;
+  const isRunning = run.status === "running";
 
   return (
     <div className="space-y-6">
@@ -43,7 +36,7 @@ export default function RunDetail({ runId, taskId }: Props) {
             {run.id}
           </h1>
           <StatusBadge status={run.status} size="md" />
-          {isStreaming && (
+          {isRunning && (
             <span className="flex items-center gap-1.5 rounded-full bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 text-xs font-medium text-green-400">
               <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
               Live
@@ -93,38 +86,34 @@ export default function RunDetail({ runId, taskId }: Props) {
         <div className="relative space-y-3 pl-10">
           <div className="absolute left-4 top-0 bottom-0 w-px bg-border-default" />
 
-          {steps.map((step, i) => {
-            const isLatest = isStreaming && i === steps.length - 1;
-            return (
-              <div key={i} className={`relative ${isLatest ? "animate-fade-in" : ""}`}>
-                <div className={`absolute -left-10 top-2.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-mono ${isLatest ? "bg-green-500/20 text-green-400" : "bg-surface-overlay text-text-muted"}`}>
-                  {step.step}
-                </div>
-
-                {step.type === "llm_reasoning" && (
-                  <RunStepReasoning
-                    step={step}
-                    defaultExpanded={
-                      isLatest ||
-                      i === 0 ||
-                      i === steps.length - 1 ||
-                      reasoningCount <= 3
-                    }
-                  />
-                )}
-                {step.type === "tool_call" && <RunStepToolCall step={step} />}
-                {step.type === "final_output" && (
-                  <RunStepFinalOutput step={step} />
-                )}
-                {step.type === "fatal_error" && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-                    <div className="mb-1 text-xs font-medium text-red-400">Fatal Error</div>
-                    <pre className="whitespace-pre-wrap text-sm text-red-300">{step.content}</pre>
-                  </div>
-                )}
+          {steps.map((step, i) => (
+            <div key={i} className="relative">
+              <div className="absolute -left-10 top-2.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-mono bg-surface-overlay text-text-muted">
+                {step.step}
               </div>
-            );
-          })}
+
+              {step.type === "llm_reasoning" && (
+                <RunStepReasoning
+                  step={step}
+                  defaultExpanded={
+                    i === 0 ||
+                    i === steps.length - 1 ||
+                    reasoningCount <= 3
+                  }
+                />
+              )}
+              {step.type === "tool_call" && <RunStepToolCall step={step} />}
+              {step.type === "final_output" && (
+                <RunStepFinalOutput step={step} />
+              )}
+              {step.type === "fatal_error" && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                  <div className="mb-1 text-xs font-medium text-red-400">Fatal Error</div>
+                  <pre className="whitespace-pre-wrap text-sm text-red-300">{step.content}</pre>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>

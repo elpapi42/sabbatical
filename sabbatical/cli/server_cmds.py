@@ -7,7 +7,7 @@ import typer
 
 from sabbatical.core.config import SABBATICAL_DIR, load_config
 
-server_app = typer.Typer(help="Server management commands")
+server_app = typer.Typer(help="API server management commands")
 
 PID_PATH = SABBATICAL_DIR / "server.pid"
 
@@ -19,8 +19,6 @@ def up():
 
     if PID_PATH.exists():
         old_pid = int(PID_PATH.read_text().strip())
-        import signal
-
         try:
             os.kill(old_pid, 0)
             typer.echo(f"Server is already running (PID {old_pid}).")
@@ -60,7 +58,10 @@ def down():
     config = load_config()
     try:
         httpx.post(f"http://{config.server.host}:{config.server.port}/api/shutdown")
-        typer.echo("Server gracefully shutting down.")
+        typer.echo(
+            "API server shutting down. "
+            "Dispatcher continues running in the background (use 'sabbatical dispatcher stop' to stop it)."
+        )
     except httpx.ConnectError:
         if PID_PATH.exists():
             old_pid = int(PID_PATH.read_text().strip())
@@ -83,8 +84,9 @@ def logs(
     follow: bool = typer.Option(True, "--follow/--no-follow", "-f", help="Follow log output"),
     lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show"),
 ):
-    """Tail the server log file."""
-    log_path = SABBATICAL_DIR / "server.log"
+    """Tail the API server log file."""
+    config = load_config()
+    log_path = Path(config.logging.api_file).expanduser()
     if not log_path.exists():
         typer.echo(f"No log file found at {log_path}")
         raise typer.Exit(1)
@@ -96,28 +98,3 @@ def logs(
         subprocess.run(cmd)
     except KeyboardInterrupt:
         pass
-
-
-@server_app.command()
-def status():
-    """Print system status."""
-    config = load_config()
-    try:
-        resp = httpx.get(f"http://{config.server.host}:{config.server.port}/api/status")
-        resp.raise_for_status()
-        data = resp.json()
-        typer.echo(f"Server: {data['server']}")
-        typer.echo(
-            f"Active Workers: {data['active_workers']} / {data['max_concurrency']}"
-        )
-        t = data["tasks"]
-        typer.echo(
-            f"Tasks: {t['open']} open, {t['in_progress']} in_progress, "
-            f"{t['failed']} failed, {t['done']} done, {t['canceled']} canceled"
-        )
-        typer.echo(
-            f"Tokens: In={data['consumed_input_tokens']} Out={data['consumed_output_tokens']}"
-        )
-        typer.echo(f"Total Cost: ${data['total_cost']:.2f}")
-    except httpx.ConnectError:
-        typer.echo("Server is offline.")

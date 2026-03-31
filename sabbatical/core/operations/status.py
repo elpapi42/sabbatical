@@ -3,6 +3,7 @@
 import databases
 
 from sabbatical.core.cost import system_total_cost
+from sabbatical.core.daemon import dispatcher_is_running
 
 
 async def get_status(db: databases.Database, config) -> dict:
@@ -30,6 +31,7 @@ async def get_status(db: databases.Database, config) -> dict:
         "tasks": tasks_counts,
         "active_workers": active_workers,
         "max_concurrency": config.dispatcher.max_concurrency,
+        "dispatcher": "running" if dispatcher_is_running() else "stopped",
         "consumed_input_tokens": cost_data["consumed_input_tokens"],
         "consumed_output_tokens": cost_data["consumed_output_tokens"],
         "total_cost": cost_data["total_cost"],

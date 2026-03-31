@@ -1,12 +1,14 @@
 """Sabbatical MCP Server — exposes Sabbatical operations as MCP tools via direct DB access."""
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 
 from mcp.server import FastMCP
 
 from sabbatical.core.config import load_config
-from sabbatical.core.db import get_database_from_config
+from sabbatical.core.context import open_db
+from sabbatical.core.daemon import ensure_dispatcher
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.operations import (
     agents as agent_ops,
@@ -24,9 +26,10 @@ _config = None
 async def lifespan(server: FastMCP):
     global _db, _config
     _config = load_config()
-    _db = await get_database_from_config()
-    yield
-    await _db.disconnect()
+    await asyncio.to_thread(ensure_dispatcher)
+    async with open_db() as db:
+        _db = db
+        yield
     _db = None
     _config = None
 
@@ -36,7 +39,7 @@ mcp = FastMCP(
     instructions=(
         "Sabbatical is a local AI agent orchestration system. "
         "Use these tools to manage organizations, agents, tasks, and runs. "
-        "All operations connect directly to the database — the API server is only needed for the dispatcher."
+        "All operations connect directly to the database — the API server is optional (only needed for the web UI)."
     ),
     lifespan=lifespan,
 )

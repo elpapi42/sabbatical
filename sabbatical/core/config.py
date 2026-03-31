@@ -23,7 +23,8 @@ class LLMConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: str = "INFO"
-    file: str = str(SABBATICAL_DIR / "logs" / "sabbatical.log")
+    api_file: str = str(SABBATICAL_DIR / "logs" / "api.log")
+    dispatcher_file: str = str(SABBATICAL_DIR / "logs" / "dispatcher.log")
 
 class SabbaticalConfig(BaseModel):
     server: ServerConfig = ServerConfig()
@@ -54,11 +55,13 @@ default_model = "minimax/minimax-m2.7"
 
 [logging]
 level = "INFO"
-file = "{log_path}"
+api_file = "{api_log_path}"
+dispatcher_file = "{dispatcher_log_path}"
 """.format(
             db_path=str(SABBATICAL_DIR / "sabbatical.db").replace('\\', '\\\\'),
             api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-            log_path=str(SABBATICAL_DIR / "logs" / "sabbatical.log").replace('\\', '\\\\')
+            api_log_path=str(SABBATICAL_DIR / "logs" / "api.log").replace('\\', '\\\\'),
+            dispatcher_log_path=str(SABBATICAL_DIR / "logs" / "dispatcher.log").replace('\\', '\\\\'),
         )
         CONFIG_PATH.write_text(default_toml)
 

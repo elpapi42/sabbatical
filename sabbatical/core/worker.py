@@ -66,7 +66,7 @@ async def _heartbeat_and_check_cancel(db, run_id):
         raise asyncio.CancelledError()
 
 
-async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, broadcaster=None):
+async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
     logger.info(
         "run start run_id=%s task_id=%s agent=%s org=%s",
         run_id, task_id, agent_name, org_name
@@ -158,8 +158,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
                         }
                         steps.append(step_data)
                         await _flush_steps(db, run_id, steps)
-                        if broadcaster:
-                            broadcaster.publish(run_id, "step", step_data)
 
                     # Record tool calls
                     for fc in event.get_function_calls():
@@ -173,8 +171,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
                         }
                         steps.append(step_data)
                         await _flush_steps(db, run_id, steps)
-                        if broadcaster:
-                            broadcaster.publish(run_id, "step", step_data)
 
                     # Flush pending comments from add_comment tool
                     flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
@@ -213,8 +209,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             }
             steps.append(step_data)
             await _flush_steps(db, run_id, steps)
-            if broadcaster:
-                broadcaster.publish(run_id, "step", step_data)
         else:
             # Agent never called add_comment(is_final=true)
             logger.warning("agent did not submit final response run_id=%s", run_id)
@@ -264,15 +258,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             run_id=run_id,
         )
 
-        if broadcaster:
-            broadcaster.publish(run_id, "done", {
-                "status": "success",
-                "total_cost": cost,
-                "consumed_input_tokens": total_input_tokens,
-                "consumed_output_tokens": total_output_tokens,
-            })
-            broadcaster.close(run_id)
-
     except MaxIterationsExceeded as e:
         logger.warning("max iterations exceeded run_id=%s task_id=%s", run_id, task_id)
         # Flush any remaining pending comments
@@ -288,8 +273,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             f"Max iterations reached ({e.count})",
             model=model,
         )
-        if broadcaster:
-            broadcaster.close(run_id)
     except RunTimedOut as e:
         minutes = e.seconds // 60
         logger.warning(
@@ -307,8 +290,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
             f"Run timed out after {minutes}m (limit: {e.seconds}s). Use `agent edit` to raise max_run_duration_seconds.",
             model=model,
         )
-        if broadcaster:
-            broadcaster.close(run_id)
     except asyncio.CancelledError:
         logger.info("run preempted run_id=%s task_id=%s", run_id, task_id)
         if thread_state:
@@ -327,8 +308,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
                 "id": run_id,
             },
         )
-        if broadcaster:
-            broadcaster.close(run_id)
         raise
     except Exception as e:
         logger.exception("run fatal error run_id=%s task_id=%s", run_id, task_id)
@@ -337,8 +316,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name, br
         await fail_run(
             db, run_id, task_id, steps, total_input_tokens, total_output_tokens, str(e), model=model,
         )
-        if broadcaster:
-            broadcaster.close(run_id)
 
 
 def _sanitize_error(reason: str) -> str:
