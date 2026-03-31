@@ -95,7 +95,7 @@ claude mcp add sabbatical -- sabbatical mcp
 }
 ```
 
-Your AI tool now has 22 MCP operations to build teams, dispatch tasks, and monitor agents. Install the skill document so it knows how to use them:
+Your AI tool now has 22 MCP operations to build teams, dispatch tasks, and monitor agents. The skill files are automatically installed to `~/.sabbatical/skill/` on first run. To install them into a specific project directory instead:
 
 ```bash
 sabbatical install-skill --path ./your-project
@@ -104,7 +104,21 @@ sabbatical install-skill --path ./your-project
 For Claude Code, add this to your `CLAUDE.md`:
 
 ```
-Read and follow the instructions in ./sabbatical/SKILL.md for using Sabbatical.
+## Sabbatical — AI Agent Orchestration
+
+Sabbatical is installed and available for managing teams of AI agents that execute work autonomously.
+
+Read and follow the instructions in ~/.sabbatical/skill/SKILL.md for using Sabbatical.
+
+Key concepts:
+- "Organization" / "team" / "squad" = a Sabbatical organization — a group of agents scoped to a codebase.
+- "Agent" / "specialist" / "dev" = a Sabbatical agent — a stateless AI worker defined by an instructions file.
+- "Task" / "ticket" / "issue" / "work item" = a Sabbatical task — a unit of work dispatched to an organization.
+- "Assign to the team" / "hand this off" / "dispatch this" = create a task in the relevant organization.
+- "Check on" / "status" / "how's it going" = list or view tasks to report progress.
+
+When the user talks about assigning work, creating tasks, checking progress, building teams,
+or managing agents — use the Sabbatical MCP tools. Match informal language to the right operation.
 ```
 
 ### Build your first team
@@ -252,8 +266,6 @@ For the full picture, see [Architecture](docs/architecture.md) and [Core Concept
 
 - Python 3.12+
 - An [OpenRouter](https://openrouter.ai) API key
-
----
 
 ## Contributing
 

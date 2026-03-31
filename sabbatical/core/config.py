@@ -1,10 +1,39 @@
+import importlib.resources
+import logging
 import tomllib
 from pathlib import Path
 from pydantic import BaseModel
 import os
 
+logger = logging.getLogger(__name__)
+
 SABBATICAL_DIR = Path.home() / ".sabbatical"
 CONFIG_PATH = SABBATICAL_DIR / "config.toml"
+SKILL_DIR = SABBATICAL_DIR / "skill"
+
+_SKIP_NAMES = {"__init__.py", "__pycache__"}
+
+
+def _copy_traversable(source, dest: Path) -> None:
+    """Recursively copy an importlib.resources Traversable tree to dest."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for item in source.iterdir():
+        if item.name in _SKIP_NAMES or item.name.endswith(".pyc"):
+            continue
+        target = dest / item.name
+        if item.is_file():
+            target.write_bytes(item.read_bytes())
+        elif item.is_dir():
+            _copy_traversable(item, target)
+
+
+def _ensure_skill_installed() -> None:
+    """Copy bundled skill files to ~/.sabbatical/skill/. Silent on failure."""
+    try:
+        source = importlib.resources.files("sabbatical.skill")
+        _copy_traversable(source, SKILL_DIR)
+    except Exception:
+        logger.debug("Failed to install skill files", exc_info=True)
 
 class ServerConfig(BaseModel):
     host: str = "127.0.0.1"
@@ -35,6 +64,8 @@ class SabbaticalConfig(BaseModel):
 def load_config() -> SabbaticalConfig:
     if not SABBATICAL_DIR.exists():
         SABBATICAL_DIR.mkdir(parents=True, exist_ok=True)
+
+    _ensure_skill_installed()
 
     if not CONFIG_PATH.exists():
         # Create a default config if it doesn't exist

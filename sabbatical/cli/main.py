@@ -96,19 +96,17 @@ def status():
 @app.command()
 def install_skill(
     path: Path = typer.Option(
-        ".", "--path", "-p", help="Target directory (SKILL.md will be written to <path>/sabbatical/SKILL.md)"
+        ".", "--path", "-p", help="Target directory (skill files written to <path>/sabbatical/)"
     ),
 ):
-    """Install the Sabbatical SKILL.md file to a target directory."""
+    """Install the Sabbatical skill files to a target directory."""
+    from sabbatical.core.config import _copy_traversable
+
     dest_dir = path.resolve() / "sabbatical"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "SKILL.md"
+    source = importlib.resources.files("sabbatical.skill")
+    _copy_traversable(source, dest_dir)
 
-    source = importlib.resources.files("sabbatical.skill").joinpath("SKILL.md")
-    with importlib.resources.as_file(source) as src_path:
-        shutil.copy2(src_path, dest)
-
-    typer.echo(f"Installed {dest}")
+    typer.echo(f"Installed skill files to {dest_dir}")
 
 
 @app.command()
