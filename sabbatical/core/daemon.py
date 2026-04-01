@@ -195,3 +195,22 @@ def dispatcher_is_running() -> bool:
     if pid is None:
         return False
     return _pid_is_alive(pid) and DISPATCHER_READY_PATH.exists()
+
+
+_last_check: float = 0.0
+_CHECK_INTERVAL = 120.0  # seconds
+
+
+def ensure_dispatcher_if_needed() -> None:
+    """Lightweight cached check — calls ensure_dispatcher() at most once per _CHECK_INTERVAL.
+
+    The check itself (dispatcher_is_running) is two filesystem stats — essentially free.
+    Only pays the full startup cost if the dispatcher actually died.
+    """
+    global _last_check
+    now = time.monotonic()
+    if now - _last_check < _CHECK_INTERVAL:
+        return
+    _last_check = now
+    if not dispatcher_is_running():
+        ensure_dispatcher()

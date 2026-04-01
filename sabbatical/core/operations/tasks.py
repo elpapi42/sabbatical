@@ -309,7 +309,7 @@ async def preempt_task(db: databases.Database, task_id: str) -> dict:
             {"id": task_id},
         )
         await db.execute(
-            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', '[SYSTEM: Task preempted by user]', :now)",
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', 'Task preempted by user.', :now)",
             {"tid": task_id, "now": now},
         )
 
@@ -351,7 +351,7 @@ async def reopen_task(db: databases.Database, task_id: str) -> dict:
             {"id": task_id},
         )
         await db.execute(
-            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', '[SYSTEM: Task reopened by user]', :now)",
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', 'Task reopened.', :now)",
             {"tid": task_id, "now": now},
         )
 
@@ -403,7 +403,7 @@ async def retry_task(
         )
         await db.execute(
             "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', :body, :now)",
-            {"tid": task_id, "body": f"[SYSTEM: Task retried — assigned to {target}]", "now": now},
+            {"tid": task_id, "body": f"Task retried — assigned to @{target}.", "now": now},
         )
 
     return {"id": task_id, "status": "open", "assignee": target}
@@ -439,7 +439,7 @@ async def cancel_task(db: databases.Database, task_id: str) -> dict:
             {"id": task_id},
         )
         await db.execute(
-            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', '[SYSTEM: Task canceled by user]', :now)",
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:tid, 'system', 'Task canceled.', :now)",
             {"tid": task_id, "now": now},
         )
 

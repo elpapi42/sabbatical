@@ -41,7 +41,7 @@ async def recover_interrupted_tasks(db) -> int:
                VALUES (:task_id, 'system', :body, :now)""",
             {
                 "task_id": row["id"],
-                "body": "[SYSTEM: Task was interrupted by a server restart and has been re-queued.]",
+                "body": "Task was interrupted by a server restart. Re-queued and will be picked up shortly.",
                 "now": now,
             },
         )
@@ -198,7 +198,7 @@ class Dispatcher:
                    VALUES (:task_id, 'system', :body, :now)""",
                 {
                     "task_id": row["task_id"],
-                    "body": "[SYSTEM: Task was found in an orphaned state (in_progress with no active worker). Marked as failed.]",
+                    "body": "Task was running but its worker is no longer active. Marked as failed — retry when ready.",
                     "now": now,
                 },
             )

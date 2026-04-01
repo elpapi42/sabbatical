@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 from sabbatical.core.config import load_config
 from sabbatical.core.context import open_db_unchecked
-from sabbatical.core.daemon import ensure_dispatcher
+from sabbatical.core.daemon import ensure_dispatcher, ensure_dispatcher_if_needed
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.logging_setup import setup_logging
 from sabbatical.api.routers._errors import core_error_handler
@@ -41,6 +41,11 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Sabbatical", lifespan=lifespan)
     app.add_exception_handler(SabbaticalError, core_error_handler)
+
+    @app.middleware("http")
+    async def dispatcher_health_check(request, call_next):
+        await asyncio.to_thread(ensure_dispatcher_if_needed)
+        return await call_next(request)
     app.include_router(status.router, prefix="/api")
     app.include_router(organizations.router, prefix="/api")
     app.include_router(agents.router, prefix="/api")

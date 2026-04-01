@@ -8,7 +8,7 @@ from mcp.server import FastMCP
 
 from sabbatical.core.config import load_config
 from sabbatical.core.context import open_db
-from sabbatical.core.daemon import ensure_dispatcher
+from sabbatical.core.daemon import ensure_dispatcher, ensure_dispatcher_if_needed
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.operations import (
     agents as agent_ops,
@@ -249,6 +249,7 @@ async def create_task(
     title: str, organization: str, description: str | None = None
 ) -> str:
     try:
+        await asyncio.to_thread(ensure_dispatcher_if_needed)
         return _json(await task_ops.create_task(_db, organization, title, description))
     except SabbaticalError as e:
         return _error(e)
@@ -259,6 +260,7 @@ async def create_task(
 )
 async def add_comment(task_id: str, body: str) -> str:
     try:
+        await asyncio.to_thread(ensure_dispatcher_if_needed)
         return _json(await task_ops.add_comment(_db, task_id, body))
     except SabbaticalError as e:
         return _error(e)
@@ -297,6 +299,7 @@ async def reopen_task(task_id: str) -> str:
 )
 async def retry_task(task_id: str, assignee: str | None = None) -> str:
     try:
+        await asyncio.to_thread(ensure_dispatcher_if_needed)
         return _json(await task_ops.retry_task(_db, task_id, assignee))
     except SabbaticalError as e:
         return _error(e)

@@ -167,6 +167,16 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                         steps.append(step_data)
                         await _flush_steps(db, run_id, steps)
 
+                    # Record tool responses (attach output to matching tool_call step)
+                    for fr in event.get_function_responses():
+                        for s in reversed(steps):
+                            if s["type"] == "tool_call" and s["tool"] == fr.name and "output" not in s:
+                                raw = fr.response or {}
+                                output_text = raw.get("output", str(raw)) if isinstance(raw, dict) else str(raw)
+                                s["output"] = output_text[:10000] if output_text else ""
+                                await _flush_steps(db, run_id, steps)
+                                break
+
                     # Flush pending comments from add_comment tool
                     await _flush_pending_comments(db, task_id, agent_name, thread_state)
 
@@ -198,7 +208,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": "[SYSTEM: Agent completed execution without submitting a response.]",
+                    "body": "Agent finished without posting any comments. Routed automatically.",
                     "now": utc_now(),
                 },
             )
@@ -262,7 +272,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
             {
                 "task_id": task_id,
-                "body": f"[SYSTEM: Agent reached iteration limit ({e.count} iterations)]",
+                "body": f"Agent hit the iteration limit ({e.count} turns). Routed based on the last comment.",
                 "now": utc_now(),
             },
         )
@@ -392,7 +402,7 @@ async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason, model: s
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": f"[SYSTEM: FATAL ERROR - {friendly}]",
+                    "body": f"Something went wrong: {friendly}",
                     "now": now,
                 },
             )
@@ -453,7 +463,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, run_id):
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": f"[SYSTEM: No valid tag in last comment. Routing to @{fallback} based on thread mentions.]",
+                    "body": f"No routing tag found. Handing off to @{fallback} based on earlier thread mentions.",
                     "now": now,
                 },
             )
@@ -467,7 +477,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, run_id):
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": "[SYSTEM: No valid tag detected. Escalating to boss.]",
+                    "body": "No routing tag found. Escalating to boss.",
                     "now": now,
                 },
             )
@@ -481,7 +491,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, run_id):
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": "[SYSTEM: No valid tag detected. Assigning to user.]",
+                    "body": "No routing tag found. Assigning back to @user.",
                     "now": now,
                 },
             )
