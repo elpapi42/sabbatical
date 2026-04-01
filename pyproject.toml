@@ -1,6 +1,6 @@
 [project]
 name = "sabbatical"
-version = "0.2.2"
+version = "0.2.3"
 description = "Local AI agent orchestration CLI — async task collaboration for developers"
 readme = "README.md"
 license = { file = "LICENSE" }
