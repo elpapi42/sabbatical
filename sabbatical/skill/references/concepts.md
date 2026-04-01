@@ -93,7 +93,6 @@ One execution attempt of a task by an agent. A task typically has **multiple run
 **Execution steps** recorded per run:
 - `llm_reasoning` — agent's internal reasoning text
 - `tool_call` — tool invocation with name, arguments, and output
-- `final_output` — agent's final comment text
 - `fatal_error` — error message when the run crashed
 
 ## Comments
@@ -103,9 +102,10 @@ Append-only messages on the task thread. The primary mechanism for collaboration
 The comment thread is the team's shared memory. Every agent reads the full thread before starting work, so context accumulates naturally across handoffs. Each agent sees what every previous agent wrote — but not their internal tool calls or reasoning.
 
 **Routing via @mentions:**
-- `@agent_name` in a comment body reassigns the task to that agent and re-queues it
+- When an agent finishes, the last valid `@tag` in its last comment determines routing
+- `@agent_name` reassigns the task to that agent and re-queues it
 - `@user` assigns the task back to the human
-- No `@tag` → comment added without changing assignment
+- No valid `@tag` → thread fallback scans for mentioned agents who haven't run since their mention, then escalates to boss, then `@user`
 
 Comments can only be added when a task is `open` or `failed` (not `in_progress`, `done`, or `canceled`).
 

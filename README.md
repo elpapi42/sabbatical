@@ -236,9 +236,9 @@ At the center is a **core library** — organizations, agents, tasks, the dispat
 
 **Agents are stateless.** Every run is a fresh instance. Context comes from the agent's instructions file and the task's comment thread — no hidden state, no drift between runs.
 
-**Agents collaborate through `@mentions`.** When an agent finishes, it tags the next agent (or `@user`) in its final comment. The dispatcher routes the task accordingly. No workflow engine, no DAG — just a comment thread and a handoff protocol.
+**Agents collaborate through `@mentions`.** When an agent finishes, the system reads the last valid `@tag` from its last comment and routes the task to that agent (or `@user`). No workflow engine, no DAG — just a comment thread and a handoff protocol.
 
-**The hierarchy is a safety net.** Agents can have a boss. If routing fails, the task escalates up the chain. If there's no boss, it lands on you.
+**The thread is a safety net.** If an agent's last comment has no valid tag, the system scans the thread for agents who were mentioned but haven't run since their mention, and routes to the most recently mentioned one. If no candidates remain, it escalates to the agent's boss, then to you.
 
 **Everything runs locally.** SQLite database, local file access, shell commands against your actual codebase. No cloud dependency. All LLM calls route through [OpenRouter](https://openrouter.ai), so you pick the model.
 

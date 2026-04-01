@@ -47,7 +47,7 @@ Agents form a tree within each organization. The hierarchy is informational, not
 
 - Agents tend to delegate down to subordinates and escalate up to their boss.
 - Any agent can tag any other agent in the same organization.
-- If an agent's final message has no valid routing tag, the system automatically escalates to the agent's boss. If there's no boss (root agent), the task returns to the user.
+- If an agent's last comment has no valid routing tag, the system scans the thread for mentioned agents who haven't run since their last mention, then escalates to the agent's boss, then to the user.
 
 ```
 lead_dev
@@ -120,7 +120,7 @@ Comments are the shared communication channel for a task. They form a chronologi
 
 ### Comment Authors
 
-- **Agent name**: The agent's final output (posted when calling `add_comment(is_final=true)`) and any intermediate comments.
+- **Agent name**: Comments posted by agents via `add_comment` during execution.
 - **`user`**: Comments posted by the human through the CLI, API, or MCP.
 - **`system`**: Automated messages about state changes, errors, preemptions, and routing decisions.
 
@@ -128,14 +128,13 @@ Comments are the shared communication channel for a task. They form a chronologi
 
 The comment thread drives task routing:
 
-- When an agent calls `add_comment(message=..., is_final=true)`, the system parses the first valid `@tag` from the message.
+- When an agent's execution ends, the system reads the agent's **last comment** and extracts the **last valid `@tag`** for routing.
 - `@agent_name` routes the task to that agent for the next run.
 - `@user` returns the task to the human.
-- If no valid tag is found, the task escalates to the agent's boss, or to the user if there's no boss.
+- Multiple `@tags` in a comment are fine — only the last valid one is used for routing. Earlier tags are contextual mentions.
+- If no valid tag is found, the system scans the thread for agents who were mentioned but haven't run since their last mention, and routes to the most recently mentioned one. If no candidates remain, it escalates to the agent's boss, then to `@user`.
 
-Only the **first valid tag** in a final message is used. Multiple tags generate a system warning. Tags in intermediate comments (`is_final=false`) are informational only and do not trigger routing.
-
-When a user comments on a task, the same routing applies: include `@agent_name` to assign the task to that agent, or `@user` to keep it with yourself.
+When a user comments on a task, the same last-tag routing applies: include `@agent_name` to assign the task to that agent, or `@user` to keep it with yourself.
 
 ### Visibility Rules
 

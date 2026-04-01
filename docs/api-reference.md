@@ -541,11 +541,6 @@ Get full run details including execution steps.
       "tool": "editor",
       "arguments": {"path": "/path/to/models.py", "command": "str_replace", "old_str": "...", "new_str": "..."}
     },
-    {
-      "step": 4,
-      "type": "final_output",
-      "content": "Added the idempotency table and handler logic. @test_writer"
-    }
   ]
 }
 ```
@@ -553,7 +548,6 @@ Get full run details including execution steps.
 **Step types**:
 - `llm_reasoning`: Agent's internal reasoning text
 - `tool_call`: Tool invocation with name and arguments
-- `final_output`: The agent's final comment text
 - `fatal_error`: Error message when the run failed
 
 ---

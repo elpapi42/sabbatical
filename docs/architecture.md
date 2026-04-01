@@ -149,7 +149,7 @@ Blocks A-C rarely change between runs. Block D (the only part that changes per t
 
 ### Tag-Based Routing
 
-Agents collaborate by writing `@agent_name` tags in their final comment. The system parses the first valid tag and routes the task accordingly. There is no sub-tasking, no DAG, no workflow engine.
+Agents collaborate by writing `@agent_name` tags in their comments. When execution ends, the system reads the last valid `@tag` from the agent's last comment and routes the task accordingly. If no valid tag is found, the system scans the thread for mentioned agents who haven't run since their mention, then escalates to the agent's boss, then to `@user`. There is no sub-tasking, no DAG, no workflow engine.
 
 **Why**: Simplicity. The routing protocol is so simple that agents learn it from a single paragraph in their system prompt. Complex orchestration adds coordination overhead that often exceeds the complexity of the work.
 

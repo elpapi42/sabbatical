@@ -290,7 +290,6 @@ Get full run details including all execution steps.
 ```json
 {"step": 1, "type": "llm_reasoning", "content": "..."}
 {"step": 2, "type": "tool_call", "tool": "...", "arguments": {...}, "output": "..."}
-{"step": 3, "type": "final_output", "content": "..."}
 {"step": N, "type": "fatal_error", "content": "..."}
 ```
 

@@ -12,7 +12,7 @@ When the dispatcher claims a task, it spawns a worker coroutine that:
 2. Builds the context payload (system prompt + user message).
 3. Creates an ADK runner with the agent's tools.
 4. Iterates over runner events, recording steps and flushing comments.
-5. After completion, applies routing based on the agent's final comment.
+5. After completion, applies routing based on the agent's last comment.
 
 ## Context Payload
 
@@ -24,8 +24,8 @@ A fixed template injected into every agent's system prompt. It covers:
 - How the comment thread works
 - Private vs. public work (tool calls are private, comments are public)
 - Available tools and their usage
-- The `add_comment` protocol (intermediate vs. final)
-- Handoff rules (`@tag` routing)
+- The `add_comment` protocol (single-mode, last-comment routing)
+- Handoff rules (last valid `@tag` routing, thread-based fallback)
 - Comment formatting guidelines (plain prose, no headers, no markdown formatting beyond lists and code blocks)
 - Iteration budget awareness
 - Error handling instructions (document blockers, escalate)
@@ -60,7 +60,7 @@ The only part that changes per task:
 - Task ID, title, and organization
 - Full task description
 - Comment thread history (all comments chronologically, with author and timestamp)
-- Instructions to act and post a final comment with `@tag`
+- Instructions to act and post comments with `@tag` for routing
 
 **Caching benefit**: Blocks A-C form a stable prefix that LLM providers can cache across runs. Block D at the bottom ensures the cache stays valid even as the task evolves.
 
@@ -108,16 +108,13 @@ Execute a shell command in the workspace directory:
 
 #### add_comment
 
-The only way agents can write to the task's comment thread:
+The only way agents can write to the task's comment thread. A single-mode tool — post a comment and keep working.
 
-- **`is_final=false`** (default): Posts an intermediate note. The agent continues working. Tags in intermediate comments are informational only - they don't trigger routing. Use for sharing progress, findings, and decisions.
-- **`is_final=true`**: Posts the final message, triggers routing, and ends execution. Must contain exactly one valid `@tag`. Can only be called once with `is_final=true`.
+All comments are written to the database immediately when flushed (after each LLM event). There is no "final" comment concept — every comment is equal. When the agent's execution ends (the LLM stops producing tool calls, or max iterations is hit), the routing engine reads the agent's **last comment** and extracts the **last valid `@tag`** for routing.
 
-**Validation on final comments**:
-- Must contain at least one valid `@tag` (agent name from the roster or `user`).
-- Must contain exactly one valid `@tag` (multiple valid tags are rejected).
-- If tags are present but none are valid, returns an error listing valid targets.
-- If no tags at all, returns an error listing valid targets.
+- No tag validation at comment time. Tags are validated at routing time.
+- No `is_final` parameter. No double-submission guards.
+- Agents can post as many comments as they want throughout execution.
 
 Comments are queued in `thread_state` and flushed to the database by the worker event loop after each LLM event.
 
@@ -138,7 +135,7 @@ The worker iterates over ADK runner events:
 
 1. **LLM reasoning**: Extract text from event content parts. Record as an `llm_reasoning` step.
 2. **Tool calls**: Extract function calls. Record each as a `tool_call` step with tool name and arguments.
-3. **Comment flushing**: Check `thread_state` for pending `add_comment` calls. Flush intermediate comments to the database. Capture final comment text if submitted.
+3. **Comment flushing**: Check `thread_state` for pending `add_comment` calls. Flush all pending comments to the database.
 4. **Token counting**: Aggregate input and output tokens from `usage_metadata`.
 5. **Heartbeat**: Update `last_heartbeat` on the run record. Check `cancel_requested` flag.
 6. **Iteration limit**: If `iteration_count >= max_iterations`, raise `MaxIterationsExceeded`.
@@ -149,19 +146,22 @@ Steps are flushed to the database after each step, enabling real-time progress v
 
 On successful completion:
 
-1. Record `final_output` step if the agent submitted a final comment.
-2. Compute cost via `openrouter_cost()` (uses LiteLLM pricing tables).
-3. Update run: `status='success'`, fill token counts, cost, and execution steps.
-4. Call `handle_routing()` to route the task based on `@tag` in the final comment.
+1. Flush any remaining pending comments.
+2. If the agent posted no comments (`comment_count == 0`), insert a system note: "[SYSTEM: Agent completed execution without submitting a response.]"
+3. Compute cost via `openrouter_cost()` (uses LiteLLM pricing tables).
+4. Update run: `status='success'`, fill token counts, cost, and execution steps.
+5. Call `handle_routing()` to route the task based on the last valid `@tag` in the agent's last comment.
 
 ### Error Handling
 
 | Error | Run Status | Task Status | System Comment |
 |-------|-----------|-------------|----------------|
-| `MaxIterationsExceeded` | `failed` | `failed` | Max iterations reached (N) |
+| `MaxIterationsExceeded` | `success` | routed normally | "Agent reached iteration limit (N iterations)" |
 | `RunTimedOut` | `failed` | `failed` | Timeout message with duration |
 | `CancelledError` | `preempted` | unchanged (already handled by preempt/cancel) | - |
 | Generic exception | `failed` | `failed` | Sanitized error message |
+
+**Max iterations vs. timeout**: Max iterations means the agent did useful work but used up its iteration budget — remaining comments are flushed, a system note is posted, and routing proceeds normally using the agent's last comment. Timeout usually means something is stuck (hung shell command, infinite loop), so the task is marked as failed with no routing attempted.
 
 Error sanitization converts technical errors into user-friendly messages:
 - Context window / token errors -> "Context window exceeded"

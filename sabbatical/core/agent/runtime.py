@@ -33,11 +33,11 @@ def create_agent_runner(
 
     thread_state = {
         "pending_comments": [],
-        "final_submitted": False,
+        "comment_count": 0,
     }
 
     workspace_tools = create_workspace_tools(workspace_path)
-    thread_tools = create_thread_tools(thread_state, valid_route_targets or {"user"})
+    thread_tools = create_thread_tools(thread_state)
     tools = workspace_tools + thread_tools
 
     agent = Agent(

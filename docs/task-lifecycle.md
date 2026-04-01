@@ -15,8 +15,8 @@ This document covers the full task lifecycle: creation, dispatch, execution, rou
                       │  │  │     agent completes ok       │  │  │  │
                       │  │  └──────────────────────────────┘  │  │  │
                       │  │                                     │  │  │
-                      │  │        max iterations / timeout     │  │  │
-                      │  │        / LLM error                  │  │  │
+                      │  │        timeout / LLM error           │  │  │
+                      │  │                                     │  │  │
                       │  │                    ┌────────────┐    │  │  │
                       │  │                    │   failed   │◀───┘  │  │
                       │  │                    └────────────┘       │  │
@@ -70,8 +70,8 @@ Within a run, the agent:
 
 1. Receives a system prompt (agent identity, org roster, system rules) and a user message (task briefing + comment thread).
 2. Works using tools: `file_read`, `file_write`, `editor`, `shell`.
-3. Posts intermediate comments via `add_comment(is_final=false)` to share progress.
-4. Posts a final comment via `add_comment(message=..., is_final=true)` with exactly one `@tag` to route the task.
+3. Posts comments via `add_comment` to share progress, findings, and decisions.
+4. Ends its last comment with an `@tag` to route the task to the next agent or `@user`.
 
 Each LLM turn increments the iteration counter. The worker updates the run's heartbeat on every event and checks for cancellation.
 
@@ -79,15 +79,31 @@ See [Agent Execution](agent-execution.md) for details.
 
 ## Routing
 
-After a successful run, the system routes the task based on the agent's final comment:
+After a successful run, the system routes the task based on the agent's **last comment** (by `created_at`):
+
+### Primary routing: last valid @tag
+
+The system extracts all `@tags` from the agent's last comment and uses the **last valid one** for routing. Earlier tags are treated as contextual mentions.
 
 | Condition | Action |
 |-----------|--------|
-| Final comment contains `@agent_name` (valid agent) | Set `status='open'`, `assignee=agent_name`, `queued_at=now` |
-| Final comment contains `@user` | Set `status='open'`, `assignee='user'` |
-| No valid `@tag` and agent has a boss | Escalate: set `assignee=boss`, `queued_at=now`. System posts "[SYSTEM: No valid tag detected. Escalating to boss.]" |
-| No valid `@tag` and agent is root | Fall back: set `assignee='user'`. System posts "[SYSTEM: No valid tag detected. Assigning to user.]" |
-| Multiple valid `@tags` found | Only the first is used. System posts a warning about ignored tags. |
+| Last comment contains valid `@agent_name` (last tag) | Set `status='open'`, `assignee=agent_name`, `queued_at=now` |
+| Last comment contains `@user` (last tag) | Set `status='open'`, `assignee='user'` |
+
+### Fallback chain: thread-based mention scanning
+
+When the agent's last comment contains no valid routing tag, the system uses the thread itself as an implicit queue:
+
+1. Scan the comment thread backwards (most recent first), skipping system comments.
+2. Collect every `@agent_name` mention, noting the timestamp of each mention.
+3. Exclude `@user` mentions and self-mentions (the agent who just ran).
+4. For each mentioned agent, compare their most recent mention timestamp against their most recent run's `started_at` on this task.
+5. Filter out agents whose most recent run is more recent than their most recent mention — they've already acted on that intent.
+6. If any eligible agent remains, route to the most recently mentioned one.
+7. If none remain, escalate to the agent's boss.
+8. If no boss (root agent), assign to `@user`.
+
+This means agents who were mentioned in the thread but haven't run since their mention are automatically picked up — recovering routing intent that was expressed earlier in the conversation.
 
 When a task is routed to an agent (not user), `queued_at` is updated so it re-enters the dispatcher queue at the current time.
 
@@ -95,10 +111,11 @@ When a task is routed to an agent (not user), `queued_at` is updated so it re-en
 
 ### Max Iterations Exceeded
 
-If the agent reaches `max_iterations` LLM turns without calling `add_comment(is_final=true)`:
-- Run status -> `failed`
-- Task status -> `failed`, assignee -> `user`
-- System comment: "[SYSTEM: FATAL ERROR - Max iterations reached (N)]"
+If the agent reaches `max_iterations` LLM turns:
+- Remaining pending comments are flushed to the database
+- System comment: "[SYSTEM: Agent reached iteration limit (N iterations)]"
+- Run status -> `success` (the agent did useful work, just ran out of budget)
+- Routing proceeds normally using the agent's last comment
 
 ### Run Timeout
 
@@ -120,12 +137,12 @@ Error sanitization maps common failures to user-friendly messages:
 - Network/connection errors
 - Generic errors show the first 120 characters
 
-### No Final Comment
+### No Comments Posted
 
-If the agent completes without calling `add_comment(is_final=true)`:
-- Run status -> `success` (the LLM execution itself completed without error, even though the agent didn't follow protocol)
-- System comment: "[SYSTEM: Agent completed execution without submitting a final response.]"
-- Routing falls back to boss escalation or user assignment
+If the agent completes without calling `add_comment` at all (`comment_count == 0`):
+- Run status -> `success` (the LLM execution itself completed without error)
+- System comment: "[SYSTEM: Agent completed execution without submitting a response.]"
+- The thread-based fallback fires — scanning earlier comments for mentioned agents who haven't run yet. If no candidates, escalates to boss, then `@user`.
 
 ### Orphaned Workers
 
@@ -206,7 +223,6 @@ Each run records execution steps as a JSON array:
 |-----------|---------|
 | `llm_reasoning` | The agent's text output from an LLM turn |
 | `tool_call` | Tool name and arguments |
-| `final_output` | The agent's final comment text |
 | `fatal_error` | Error message when the run fails |
 
 Steps are flushed to the database after each one, enabling real-time progress tracking.

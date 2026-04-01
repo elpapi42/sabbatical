@@ -11,7 +11,7 @@ from sabbatical.core.exceptions import (
     NotFoundError,
     PreconditionError,
 )
-from sabbatical.core.tag_parser import resolve_first_valid_tag
+from sabbatical.core.tag_parser import resolve_last_valid_tag
 
 
 def _utc_now() -> str:
@@ -230,7 +230,7 @@ async def add_comment(
         )
         valid_names = {r["name"] for r in roster} | {"user"}
 
-        tag, all_tags = resolve_first_valid_tag(body, valid_names)
+        tag, all_tags = resolve_last_valid_tag(body, valid_names)
 
         # Tags present but none resolved to a valid target
         if not tag and all_tags:

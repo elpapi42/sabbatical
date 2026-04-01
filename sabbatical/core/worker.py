@@ -7,7 +7,7 @@ from pathlib import Path
 from sabbatical.core.agent.runtime import create_agent_runner
 from sabbatical.core.context_builder import build_context_payload
 from sabbatical.core.cost import openrouter_cost
-from sabbatical.core.tag_parser import resolve_first_valid_tag
+from sabbatical.core.tag_parser import extract_all_tags, resolve_last_valid_tag
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +35,14 @@ async def _flush_steps(db, run_id, steps):
 
 
 async def _flush_pending_comments(db, task_id, agent_name, thread_state):
-    """Flush any pending add_comment messages to the DB. Returns the final message if one was submitted."""
-    final_message = None
+    """Flush all pending add_comment messages to the DB."""
     while thread_state["pending_comments"]:
-        message, is_final = thread_state["pending_comments"].pop(0)
+        message = thread_state["pending_comments"].pop(0)
         now = utc_now()
-        if is_final:
-            final_message = message
-            # Final comment is written by handle_routing, not here
-        else:
-            await db.execute(
-                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, :author, :body, :now)",
-                {"task_id": task_id, "author": agent_name, "body": message, "now": now},
-            )
-    return final_message
+        await db.execute(
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, :author, :body, :now)",
+            {"task_id": task_id, "author": agent_name, "body": message, "now": now},
+        )
 
 
 async def _heartbeat_and_check_cancel(db, run_id):
@@ -76,7 +70,8 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
     total_input_tokens = 0
     total_output_tokens = 0
     thread_state = None
-    reply_text = None
+    model = ""
+    agent_row = None
 
     try:
         agent_row = await db.fetch_one(
@@ -173,9 +168,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
                         await _flush_steps(db, run_id, steps)
 
                     # Flush pending comments from add_comment tool
-                    flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
-                    if flushed_final is not None:
-                        reply_text = flushed_final
+                    await _flush_pending_comments(db, task_id, agent_name, thread_state)
 
                     if event.usage_metadata and not event.partial:
                         total_input_tokens += event.usage_metadata.prompt_token_count or 0
@@ -196,27 +189,16 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
 
         # Flush any remaining pending comments after the loop ends
         if thread_state:
-            flushed_final = await _flush_pending_comments(db, task_id, agent_name, thread_state)
-            if flushed_final is not None:
-                reply_text = flushed_final
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
 
-        # Record the final output step
-        if reply_text:
-            step_data = {
-                "step": step_count + 1,
-                "type": "final_output",
-                "content": reply_text,
-            }
-            steps.append(step_data)
-            await _flush_steps(db, run_id, steps)
-        else:
-            # Agent never called add_comment(is_final=true)
-            logger.warning("agent did not submit final response run_id=%s", run_id)
+        # If the agent never posted any comments, insert a system note
+        if thread_state and thread_state["comment_count"] == 0:
+            logger.warning("agent posted no comments run_id=%s", run_id)
             await db.execute(
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
                 {
                     "task_id": task_id,
-                    "body": "[SYSTEM: Agent completed execution without submitting a final response.]",
+                    "body": "[SYSTEM: Agent completed execution without submitting a response.]",
                     "now": utc_now(),
                 },
             )
@@ -266,7 +248,6 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
             org_name=org_name,
             agent_name=agent_name,
             agent_boss=agent_row["boss"],
-            final_text=reply_text or "",
             run_id=run_id,
         )
 
@@ -275,15 +256,44 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
         # Flush any remaining pending comments
         if thread_state:
             await _flush_pending_comments(db, task_id, agent_name, thread_state)
-        await fail_run(
-            db,
-            run_id,
-            task_id,
-            steps,
-            total_input_tokens,
-            total_output_tokens,
-            f"Max iterations reached ({e.count})",
-            model=model,
+
+        # Post system note about iteration limit
+        await db.execute(
+            "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
+            {
+                "task_id": task_id,
+                "body": f"[SYSTEM: Agent reached iteration limit ({e.count} iterations)]",
+                "now": utc_now(),
+            },
+        )
+
+        # Mark run as success (agent did work, just ran out of budget)
+        cost = openrouter_cost(model, total_input_tokens, total_output_tokens) if model else 0.0
+        await db.execute(
+            """UPDATE runs
+               SET status = 'success', ended_at = :now,
+                   consumed_input_tokens = :in_tok, consumed_output_tokens = :out_tok,
+                   total_cost = :cost, execution_steps = :steps
+               WHERE id = :id""",
+            {
+                "now": utc_now(),
+                "in_tok": total_input_tokens,
+                "out_tok": total_output_tokens,
+                "cost": cost,
+                "steps": json.dumps(steps),
+                "id": run_id,
+            },
+        )
+
+        # Route normally using the agent's last comment
+        assert agent_row is not None
+        await handle_routing(
+            db=db,
+            task_id=task_id,
+            org_name=org_name,
+            agent_name=agent_name,
+            agent_boss=agent_row["boss"],
+            run_id=run_id,
         )
     except RunTimedOut as e:
         minutes = e.seconds // 60
@@ -392,7 +402,7 @@ async def fail_run(db, run_id, task_id, steps, in_tok, out_tok, reason, model: s
             )
 
 
-async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_text, run_id):
+async def handle_routing(db, task_id, org_name, agent_name, agent_boss, run_id):
     now = utc_now()
 
     async with db.transaction():
@@ -402,17 +412,6 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
         if not task or task["status"] != "in_progress":
             return  # Preempted
 
-        if final_text:
-            await db.execute(
-                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, :author, :body, :now)",
-                {
-                    "task_id": task_id,
-                    "author": agent_name,
-                    "body": final_text,
-                    "now": now,
-                },
-            )
-
         # Build the set of valid routing targets for this organization
         roster = await db.fetch_all(
             "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
@@ -420,20 +419,14 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
         )
         valid_names = {r["name"] for r in roster} | {"user"}
 
-        tag, all_tags = resolve_first_valid_tag(final_text, valid_names)
+        # Query the agent's last comment for primary routing
+        last_comment = await db.fetch_one(
+            "SELECT body FROM comments WHERE task_id = :id AND author = :agent ORDER BY created_at DESC LIMIT 1",
+            {"id": task_id, "agent": agent_name},
+        )
+        last_text = last_comment["body"] if last_comment else ""
 
-        # Warn if multiple valid tags were found (agent violated single-tag rule)
-        valid_tags_found = [t for t in all_tags if t in valid_names]
-        if len(valid_tags_found) > 1:
-            ignored = ", ".join(f"@{t}" for t in valid_tags_found[1:])
-            await db.execute(
-                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
-                {
-                    "task_id": task_id,
-                    "body": f"[SYSTEM: Multiple valid tags detected in output. Only @{tag} was used. Ignored: {ignored}]",
-                    "now": now,
-                },
-            )
+        tag, _all_tags = resolve_last_valid_tag(last_text, valid_names)
 
         if tag == "user":
             logger.info("routing run_id=%s -> user", run_id)
@@ -451,8 +444,24 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
             )
             return
 
-        # No valid tag found: escalate to boss or fall back to user
-        if agent_boss:
+        # No valid tag in last comment — thread-based fallback
+        fallback = await _thread_fallback(db, task_id, agent_name, valid_names)
+
+        if fallback:
+            logger.info("routing run_id=%s -> %s (thread fallback)", run_id, fallback)
+            await db.execute(
+                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
+                {
+                    "task_id": task_id,
+                    "body": f"[SYSTEM: No valid tag in last comment. Routing to @{fallback} based on thread mentions.]",
+                    "now": now,
+                },
+            )
+            await db.execute(
+                "UPDATE tasks SET status='open', assignee=:assignee, queued_at=:now WHERE id = :id",
+                {"assignee": fallback, "now": now, "id": task_id},
+            )
+        elif agent_boss:
             logger.info("routing run_id=%s -> %s (boss escalation)", run_id, agent_boss)
             await db.execute(
                 "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
@@ -480,3 +489,50 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, final_te
                 "UPDATE tasks SET status='open', assignee='user' WHERE id = :id",
                 {"id": task_id},
             )
+
+
+async def _thread_fallback(db, task_id, current_agent, valid_names):
+    """Scan thread for mentioned agents who haven't run since their last mention.
+
+    Returns the most recently mentioned eligible agent name, or None.
+    """
+    # Get all non-system comments in the thread (most recent first)
+    comments = await db.fetch_all(
+        "SELECT author, body, created_at FROM comments WHERE task_id = :id AND author != 'system' ORDER BY created_at DESC",
+        {"id": task_id},
+    )
+
+    # Collect the most recent mention timestamp for each agent
+    # (scanning most-recent-first, so first occurrence per agent is their latest mention)
+    latest_mention: dict[str, str] = {}  # agent_name -> created_at
+    for comment in comments:
+        for tag in extract_all_tags(comment["body"]):
+            if tag not in latest_mention and tag in valid_names and tag != "user":
+                latest_mention[tag] = comment["created_at"]
+
+    if not latest_mention:
+        return None
+
+    # Filter out the current agent (prevent self-routing)
+    latest_mention.pop(current_agent, None)
+
+    if not latest_mention:
+        return None
+
+    # Get the most recent run started_at for each mentioned agent on this task
+    eligible = []
+    for agent_name, mention_ts in latest_mention.items():
+        last_run = await db.fetch_one(
+            "SELECT started_at FROM runs WHERE task_id = :tid AND agent_name = :agent ORDER BY started_at DESC LIMIT 1",
+            {"tid": task_id, "agent": agent_name},
+        )
+        if last_run is None or last_run["started_at"] < mention_ts:
+            # Agent hasn't run since their latest mention — eligible
+            eligible.append((agent_name, mention_ts))
+
+    if not eligible:
+        return None
+
+    # Route to the most recently mentioned eligible agent
+    eligible.sort(key=lambda x: x[1], reverse=True)
+    return eligible[0][0]
