@@ -23,7 +23,7 @@ def build_agent_tree(agents_list: list[dict]) -> list[dict]:
             "instructions_path": a["instructions_path"],
             "max_iterations": a["max_iterations"],
             "model": a.get("model"),
-            "is_removed": bool(a.get("is_removed", 0)),
+            "is_removed": bool(a.get("is_removed", False)),
             "subordinates": [],
         }
     roots = []
@@ -70,7 +70,7 @@ async def list_organizations(db: databases.Database) -> list[dict]:
     result = []
     for r in rows:
         agent_count = await db.fetch_val(
-            "SELECT COUNT(*) FROM agents WHERE organization_name = :org AND is_removed = 0",
+            "SELECT COUNT(*) FROM agents WHERE organization_name = :org AND NOT is_removed",
             {"org": r["name"]},
         )
         cost_data = await organization_total_cost(db, r["name"])
@@ -92,7 +92,7 @@ async def get_organization(db: databases.Database, name: str) -> dict:
         raise NotFoundError("Organization", name)
 
     agents_rows = await db.fetch_all(
-        "SELECT * FROM agents WHERE organization_name = :org AND is_removed = 0",
+        "SELECT * FROM agents WHERE organization_name = :org AND NOT is_removed",
         {"org": name},
     )
     tree = build_agent_tree([dict(r) for r in agents_rows])

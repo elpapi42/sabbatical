@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     ForeignKeyConstraint,
@@ -15,9 +16,9 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    func,
 )
-
-from sabbatical.core.config import SABBATICAL_DIR, load_config
+from sqlalchemy.sql import expression
 
 metadata = MetaData()
 
@@ -29,9 +30,9 @@ organizations = Table(
     Column("workspace_path", String, nullable=False),
     Column(
         "created_at",
-        String,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
+        server_default=func.now(),
     ),
 )
 
@@ -50,12 +51,12 @@ agents = Table(
     Column("instructions_path", String, nullable=False),
     Column("max_iterations", Integer, nullable=False),
     Column("model", String, nullable=True),
-    Column("is_removed", Integer, nullable=False, server_default="0"),
+    Column("is_removed", Boolean, nullable=False, server_default=expression.false()),
     Column(
         "created_at",
-        String,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
+        server_default=func.now(),
     ),
     ForeignKeyConstraint(
         ["organization_name", "boss"],
@@ -79,12 +80,12 @@ tasks = Table(
     Column("description", Text, nullable=False),
     Column("status", String, nullable=False, server_default="open"),
     Column("assignee", String, nullable=False, server_default="user"),
-    Column("queued_at", String, nullable=True),
+    Column("queued_at", DateTime(timezone=True), nullable=True),
     Column(
         "created_at",
-        String,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
+        server_default=func.now(),
     ),
     CheckConstraint("status IN ('open', 'in_progress', 'failed', 'done', 'canceled')"),
 )
@@ -92,7 +93,7 @@ tasks = Table(
 idx_tasks_dispatch = Index(
     "idx_tasks_dispatch",
     tasks.c.queued_at,
-    sqlite_where=sqlalchemy.text("status = 'open' AND assignee != 'user'"),
+    postgresql_where=sqlalchemy.text("status = 'open' AND assignee != 'user'"),
 )
 
 task_sequences = Table(
@@ -118,9 +119,9 @@ comments = Table(
     Column("body", Text, nullable=False),
     Column(
         "created_at",
-        String,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
+        server_default=func.now(),
     ),
 )
 
@@ -136,49 +137,26 @@ runs = Table(
     Column("status", String, nullable=False, server_default="running"),
     Column(
         "started_at",
-        String,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=sqlalchemy.text("(strftime('%Y-%m-%dT%H:%M:%S.%fZ', 'now'))"),
+        server_default=func.now(),
     ),
-    Column("ended_at", String, nullable=True),
+    Column("ended_at", DateTime(timezone=True), nullable=True),
     Column("model_used", String, nullable=True),
     Column("consumed_input_tokens", Integer, nullable=False, server_default="0"),
     Column("consumed_output_tokens", Integer, nullable=False, server_default="0"),
     Column("total_cost", Float, nullable=False, server_default="0.0"),
     Column("execution_steps", Text, nullable=False, server_default="[]"),
-    Column("last_heartbeat", String, nullable=True),
-    Column("cancel_requested", Integer, nullable=False, server_default="0"),
+    Column("last_heartbeat", DateTime(timezone=True), nullable=True),
+    Column("cancel_requested", Boolean, nullable=False, server_default=expression.false()),
     CheckConstraint("status IN ('running', 'success', 'failed', 'preempted')"),
 )
 
 
-class _PragmaPool:
-    """Wraps SQLitePool to execute PRAGMAs on every new connection."""
-
-    def __init__(self, original_pool):
-        self._pool = original_pool
-
-    async def acquire(self):
-        conn = await self._pool.acquire()
-        await conn.execute("PRAGMA foreign_keys=ON")
-        await conn.execute("PRAGMA journal_mode=WAL")
-        await conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    async def release(self, connection):
-        await self._pool.release(connection)
-
-    def __getattr__(self, name):
-        return getattr(self._pool, name)
-
-
-async def get_database(db_path: str) -> databases.Database:
+async def get_database(dsn: str) -> databases.Database:
     """Create and connect a databases.Database instance."""
-    database = databases.Database(f"sqlite+aiosqlite:///{db_path}")
+    database = databases.Database(dsn)
     await database.connect()
-    # Wrap the pool to set pragmas on every connection
-    backend = database._backend
-    backend._pool = _PragmaPool(backend._pool)
     return database
 
 
@@ -208,13 +186,15 @@ async def _check_schema_version(db: databases.Database) -> None:
 
 
 async def get_database_from_config() -> databases.Database:
-    """Create a database connection using the default config path.
+    """Create a database connection using the pg0 URI file.
 
     Used by CLI and MCP processes that connect directly to the DB
     without going through the API server. Includes a schema version
     check — raises if the DB is behind the expected Alembic revision.
     """
-    config = load_config()
-    db = await get_database(config.server.db_path)
+    from sabbatical.core.pg0_utils import read_pg0_uri, async_dsn_from_pg0_uri
+
+    dsn = async_dsn_from_pg0_uri(read_pg0_uri())
+    db = await get_database(dsn)
     await _check_schema_version(db)
     return db

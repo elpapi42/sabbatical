@@ -34,14 +34,19 @@ async def open_db():
 
 
 @asynccontextmanager
-async def open_db_unchecked(db_path: str):
+async def open_db_unchecked():
     """Open a DB connection without schema checks.
+
+    Reads the DSN from the pg0.uri file written by the dispatcher.
 
     For callers that manage their own lifecycle (e.g. the API server, where
     the dispatcher handles migrations) or observation-only commands
     (e.g. `server status`) that should not fail on a pending migration.
     """
-    db = await get_database(db_path)
+    from sabbatical.core.pg0_utils import read_pg0_uri, async_dsn_from_pg0_uri
+
+    dsn = async_dsn_from_pg0_uri(read_pg0_uri())
+    db = await get_database(dsn)
     try:
         yield db
     finally:

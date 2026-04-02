@@ -2,7 +2,7 @@ import importlib.resources
 import logging
 import tomllib
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import os
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,17 @@ def _ensure_skill_installed() -> None:
         logger.debug("Failed to install skill files", exc_info=True)
 
 class ServerConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")  # silently drop old db_path field
     host: str = "127.0.0.1"
     port: int = 7420
-    db_path: str = str(SABBATICAL_DIR / "sabbatical.db")
+
+
+class DatabaseConfig(BaseModel):
+    pg0_port: int = 54320
+    pg0_instance: str = "sabbatical"
+    username: str = "postgres"
+    password: str = "postgres"
+    database: str = "sabbatical"
 
 class DispatcherConfig(BaseModel):
     polling_interval_ms: int = 500
@@ -58,6 +66,7 @@ class LoggingConfig(BaseModel):
 
 class SabbaticalConfig(BaseModel):
     server: ServerConfig = ServerConfig()
+    database: DatabaseConfig = DatabaseConfig()
     dispatcher: DispatcherConfig = DispatcherConfig()
     llm: LLMConfig = LLMConfig()
     logging: LoggingConfig = LoggingConfig()
@@ -73,7 +82,13 @@ def load_config() -> SabbaticalConfig:
         default_toml = """[server]
 host = "127.0.0.1"
 port = 7420
-db_path = "{db_path}"
+
+[database]
+pg0_port = 54320
+pg0_instance = "sabbatical"
+username = "postgres"
+password = "postgres"
+database = "sabbatical"
 
 [dispatcher]
 polling_interval_ms = 500
@@ -90,7 +105,6 @@ level = "INFO"
 api_file = "{api_log_path}"
 dispatcher_file = "{dispatcher_log_path}"
 """.format(
-            db_path=str(SABBATICAL_DIR / "sabbatical.db").replace('\\', '\\\\'),
             api_key=os.environ.get("OPENROUTER_API_KEY", ""),
             api_log_path=str(SABBATICAL_DIR / "logs" / "api.log").replace('\\', '\\\\'),
             dispatcher_log_path=str(SABBATICAL_DIR / "logs" / "dispatcher.log").replace('\\', '\\\\'),
@@ -100,5 +114,12 @@ dispatcher_file = "{dispatcher_log_path}"
     with open(CONFIG_PATH, "rb") as f:
         raw = tomllib.load(f)
 
-    # Handle the fact that we might have missing sections in a newly created or partial config
+    # Deprecation warning for old SQLite config
+    if "server" in raw and "db_path" in raw["server"] and "database" not in raw:
+        logger.warning(
+            "config.toml has deprecated server.db_path — "
+            "SQLite has been replaced by pg0. Add a [database] section or "
+            "delete config.toml to regenerate defaults."
+        )
+
     return SabbaticalConfig(**raw)

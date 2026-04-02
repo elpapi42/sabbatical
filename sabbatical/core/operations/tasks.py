@@ -14,8 +14,8 @@ from sabbatical.core.exceptions import (
 from sabbatical.core.tag_parser import resolve_last_valid_tag
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _generate_task_id(organization_name: str, number: int) -> str:
@@ -44,7 +44,7 @@ async def create_task(
             raise NotFoundError("Organization", organization)
 
         root_agent = await db.fetch_one(
-            "SELECT name FROM agents WHERE organization_name = :org AND boss IS NULL AND is_removed = 0 LIMIT 1",
+            "SELECT name FROM agents WHERE organization_name = :org AND boss IS NULL AND NOT is_removed LIMIT 1",
             {"org": organization},
         )
         if not root_agent:
@@ -114,14 +114,11 @@ async def list_tasks(
                 {"tid": r["id"]},
             )
             if run:
-                started = datetime.fromisoformat(
-                    run["started_at"].replace("Z", "+00:00")
-                )
-                elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - run["started_at"]).total_seconds()
         elif r["status"] in ("done", "failed", "canceled"):
             dur_row = await db.fetch_one(
                 """SELECT SUM(
-                    CAST((julianday(ended_at) - julianday(started_at)) * 86400 AS REAL)
+                    EXTRACT(EPOCH FROM (ended_at - started_at))
                 ) as total_dur FROM runs
                 WHERE task_id = :tid AND ended_at IS NOT NULL""",
                 {"tid": r["id"]},
@@ -169,12 +166,10 @@ async def get_task(db: databases.Database, task_id: str) -> dict:
             "created_at": c["created_at"],
         })
     for r in runs:
-        st = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
         if r["ended_at"]:
-            en = datetime.fromisoformat(r["ended_at"].replace("Z", "+00:00"))
-            dur = (en - st).total_seconds()
+            dur = (r["ended_at"] - r["started_at"]).total_seconds()
         elif r["status"] == "running":
-            dur = (datetime.now(timezone.utc) - st).total_seconds()
+            dur = (datetime.now(timezone.utc) - r["started_at"]).total_seconds()
         else:
             dur = None
 
@@ -225,7 +220,7 @@ async def add_comment(
 
         # Build valid routing targets for this organization
         roster = await db.fetch_all(
-            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            "SELECT name FROM agents WHERE organization_name = :org AND NOT is_removed",
             {"org": task["organization_name"]},
         )
         valid_names = {r["name"] for r in roster} | {"user"}
@@ -300,7 +295,7 @@ async def preempt_task(db: databases.Database, task_id: str) -> dict:
         run_id = run["id"] if run else None
         if run_id:
             await db.execute(
-                "UPDATE runs SET cancel_requested = 1 WHERE id = :run_id",
+                "UPDATE runs SET cancel_requested = true WHERE id = :run_id",
                 {"run_id": run_id},
             )
 
@@ -391,7 +386,7 @@ async def retry_task(
 
         # Validate agent exists
         agent = await db.fetch_one(
-            "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
+            "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND NOT is_removed",
             {"name": target, "org": task["organization_name"]},
         )
         if not agent:
@@ -430,7 +425,7 @@ async def cancel_task(db: databases.Database, task_id: str) -> dict:
             run_id = run["id"] if run else None
             if run_id:
                 await db.execute(
-                    "UPDATE runs SET cancel_requested = 1 WHERE id = :run_id",
+                    "UPDATE runs SET cancel_requested = true WHERE id = :run_id",
                     {"run_id": run_id},
                 )
 

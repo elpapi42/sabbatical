@@ -9,8 +9,8 @@ from sabbatical.core.worker import run_agent_worker
 logger = logging.getLogger(__name__)
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 async def recover_interrupted_tasks(db) -> int:
@@ -76,9 +76,7 @@ class Dispatcher:
         max_conc = self._config.dispatcher.max_concurrency
 
         # DB-driven concurrency check: count runs with a recent heartbeat
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
-        )
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)
         row = await self._db.fetch_one(
             "SELECT COUNT(*) as cnt FROM runs WHERE status = 'running' AND (last_heartbeat > :cutoff OR last_heartbeat IS NULL)",
             {"cutoff": cutoff},
@@ -164,9 +162,7 @@ class Dispatcher:
         last_heartbeat is older than the configured orphan timeout. This
         catches workers that crashed without cleaning up.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
-        )
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._config.dispatcher.orphan_timeout_seconds)
         rows = await self._db.fetch_all(
             """
             SELECT r.id AS run_id, r.task_id
@@ -211,7 +207,7 @@ class Dispatcher:
         """
         logger.info("dispatcher shutting down — requesting cancellation of all running runs")
         await self._db.execute(
-            "UPDATE runs SET cancel_requested = 1 WHERE status = 'running'"
+            "UPDATE runs SET cancel_requested = true WHERE status = 'running'"
         )
         if self._worker_tasks:
             logger.info("waiting for %d worker(s) to drain (30s timeout)", len(self._worker_tasks))

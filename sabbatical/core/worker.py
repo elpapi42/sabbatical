@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from google.genai import types
+
 from sabbatical.core.agent.runtime import create_agent_runner
 from sabbatical.core.context_builder import build_context_payload
 from sabbatical.core.cost import openrouter_cost
@@ -23,8 +25,8 @@ class RunTimedOut(Exception):
         super().__init__(f"Run timed out after {seconds}s")
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 async def _flush_steps(db, run_id, steps):
@@ -106,7 +108,7 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
 
         # Build roster of valid routing targets for tag validation
         roster = await db.fetch_all(
-            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            "SELECT name FROM agents WHERE organization_name = :org AND NOT is_removed",
             {"org": org_name},
         )
         valid_route_targets = {r["name"] for r in roster} | {"user"}
@@ -201,17 +203,72 @@ async def run_agent_worker(db, config, task_id, run_id, agent_name, org_name):
         if thread_state:
             await _flush_pending_comments(db, task_id, agent_name, thread_state)
 
-        # If the agent never posted any comments, insert a system note
+        # If the agent never posted any comments, nudge it to do so
         if thread_state and thread_state["comment_count"] == 0:
-            logger.warning("agent posted no comments run_id=%s", run_id)
-            await db.execute(
-                "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
-                {
-                    "task_id": task_id,
-                    "body": "Agent finished without posting any comments. Routed automatically.",
-                    "now": utc_now(),
-                },
+            logger.warning("agent posted no comments, nudging run_id=%s", run_id)
+            nudge_message = types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=(
+                    "You finished your work without calling add_comment. "
+                    "This is required. You MUST call add_comment now to summarize "
+                    "what you did and route the task with an @mention. "
+                    "Do not do any more work — just post the comment."
+                ))],
             )
+            nudge_budget = 5
+            nudge_iterations = 0
+            async for event in runner.run_async(
+                user_id="sabbatical",
+                session_id=session_id,
+                new_message=nudge_message,
+            ):
+                if event.content and event.content.parts:
+                    text = "".join(p.text for p in event.content.parts if p.text)
+                    if text and not event.partial:
+                        step_count += 1
+                        steps.append({"step": step_count, "type": "llm_reasoning", "content": text})
+                        await _flush_steps(db, run_id, steps)
+
+                for fc in event.get_function_calls():
+                    step_count += 1
+                    steps.append({"step": step_count, "type": "tool_call", "tool": fc.name, "arguments": dict(fc.args) if fc.args else {}})
+                    await _flush_steps(db, run_id, steps)
+
+                for fr in event.get_function_responses():
+                    for s in reversed(steps):
+                        if s["type"] == "tool_call" and s["tool"] == fr.name and "output" not in s:
+                            raw = fr.response or {}
+                            output_text = raw.get("output", str(raw)) if isinstance(raw, dict) else str(raw)
+                            s["output"] = output_text[:10000] if output_text else ""
+                            await _flush_steps(db, run_id, steps)
+                            break
+
+                await _flush_pending_comments(db, task_id, agent_name, thread_state)
+
+                if event.usage_metadata and not event.partial:
+                    total_input_tokens += event.usage_metadata.prompt_token_count or 0
+                    total_output_tokens += event.usage_metadata.candidates_token_count or 0
+                    nudge_iterations += 1
+
+                await _heartbeat_and_check_cancel(db, run_id)
+
+                if nudge_iterations >= nudge_budget:
+                    break
+
+            # Final flush after nudge
+            await _flush_pending_comments(db, task_id, agent_name, thread_state)
+
+            # If still no comment after the nudge, insert a system note as last resort
+            if thread_state["comment_count"] == 0:
+                logger.warning("agent still posted no comments after nudge run_id=%s", run_id)
+                await db.execute(
+                    "INSERT INTO comments (task_id, author, body, created_at) VALUES (:task_id, 'system', :body, :now)",
+                    {
+                        "task_id": task_id,
+                        "body": "Agent finished without posting any comments. Routed automatically.",
+                        "now": utc_now(),
+                    },
+                )
 
         cost = openrouter_cost(
             model=model,
@@ -424,7 +481,7 @@ async def handle_routing(db, task_id, org_name, agent_name, agent_boss, run_id):
 
         # Build the set of valid routing targets for this organization
         roster = await db.fetch_all(
-            "SELECT name FROM agents WHERE organization_name = :org AND is_removed = 0",
+            "SELECT name FROM agents WHERE organization_name = :org AND NOT is_removed",
             {"org": org_name},
         )
         valid_names = {r["name"] for r in roster} | {"user"}
@@ -514,7 +571,7 @@ async def _thread_fallback(db, task_id, current_agent, valid_names):
 
     # Collect the most recent mention timestamp for each agent
     # (scanning most-recent-first, so first occurrence per agent is their latest mention)
-    latest_mention: dict[str, str] = {}  # agent_name -> created_at
+    latest_mention: dict = {}  # agent_name -> created_at
     for comment in comments:
         for tag in extract_all_tags(comment["body"]):
             if tag not in latest_mention and tag in valid_names and tag != "user":

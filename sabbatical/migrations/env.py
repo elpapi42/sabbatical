@@ -3,15 +3,18 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from sabbatical.core.config import load_config
 from sabbatical.core.db import metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-app_config = load_config()
-config.set_main_option("sqlalchemy.url", f"sqlite:///{app_config.server.db_path}")
+# URL is normally set by migrations.py before alembic_command.upgrade() runs.
+# Only set it here as a fallback for standalone `alembic` CLI usage.
+current_url = config.get_main_option("sqlalchemy.url")
+if not current_url or current_url == "driver://user:pass@localhost/dbname":
+    from sabbatical.core.pg0_utils import read_pg0_uri, sync_dsn_from_pg0_uri
+    config.set_main_option("sqlalchemy.url", sync_dsn_from_pg0_uri(read_pg0_uri()))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -8,10 +8,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from sabbatical.core.config import load_config
-from sabbatical.core.context import open_db_unchecked
 from sabbatical.core.daemon import ensure_dispatcher, ensure_dispatcher_if_needed
+from sabbatical.core.db import get_database
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.logging_setup import setup_logging
+from sabbatical.core.pg0_utils import read_pg0_uri, async_dsn_from_pg0_uri
 from sabbatical.api.routers._errors import core_error_handler
 from sabbatical.api.routers import (
     agents,
@@ -31,11 +32,16 @@ async def lifespan(app: FastAPI):
 
     await asyncio.to_thread(ensure_dispatcher)
 
-    async with open_db_unchecked(config.server.db_path) as db:
-        app.state.db = db
-        app.state.config = config
+    dsn = async_dsn_from_pg0_uri(read_pg0_uri())
+    db = await get_database(dsn)
+    app.state.db = db
+    app.state.db_uri = read_pg0_uri()
+    app.state.config = config
+    try:
         yield
-    logger.info("server shutdown complete")
+    finally:
+        await db.disconnect()
+        logger.info("server shutdown complete")
 
 
 def create_app() -> FastAPI:
@@ -43,9 +49,18 @@ def create_app() -> FastAPI:
     app.add_exception_handler(SabbaticalError, core_error_handler)
 
     @app.middleware("http")
-    async def dispatcher_health_check(request, call_next):
+    async def db_reconnect_middleware(request, call_next):
         await asyncio.to_thread(ensure_dispatcher_if_needed)
+        # If pg0 restarted on a different port, swap the pool
+        current_uri = read_pg0_uri()
+        if current_uri != request.app.state.db_uri:
+            await request.app.state.db.disconnect()
+            request.app.state.db = await get_database(
+                async_dsn_from_pg0_uri(current_uri)
+            )
+            request.app.state.db_uri = current_uri
         return await call_next(request)
+
     app.include_router(status.router, prefix="/api")
     app.include_router(organizations.router, prefix="/api")
     app.include_router(agents.router, prefix="/api")

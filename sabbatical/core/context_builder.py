@@ -128,7 +128,7 @@ async def build_context_payload(db, config, agent, task, comments, org_name):
         "SELECT * FROM organizations WHERE name = :name", {"name": org_name}
     )
     all_agents = await db.fetch_all(
-        "SELECT * FROM agents WHERE organization_name = :org AND is_removed = 0",
+        "SELECT * FROM agents WHERE organization_name = :org AND NOT is_removed",
         {"org": org_name},
     )
 

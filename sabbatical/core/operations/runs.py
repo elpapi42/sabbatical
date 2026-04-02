@@ -1,7 +1,6 @@
 """Run operations — read-only async functions over the database."""
 
 import json
-from datetime import datetime
 
 import databases
 
@@ -23,9 +22,7 @@ async def list_runs(db: databases.Database, task_id: str) -> list[dict]:
     for r in rows:
         dur = None
         if r["ended_at"]:
-            st = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
-            en = datetime.fromisoformat(r["ended_at"].replace("Z", "+00:00"))
-            dur = (en - st).total_seconds()
+            dur = (r["ended_at"] - r["started_at"]).total_seconds()
 
         runs.append({
             "id": r["id"],
@@ -52,9 +49,7 @@ async def get_run(db: databases.Database, run_id: str) -> dict:
 
     dur = None
     if r["ended_at"]:
-        st = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
-        en = datetime.fromisoformat(r["ended_at"].replace("Z", "+00:00"))
-        dur = (en - st).total_seconds()
+        dur = (r["ended_at"] - r["started_at"]).total_seconds()
 
     steps_raw = json.loads(r["execution_steps"])
 

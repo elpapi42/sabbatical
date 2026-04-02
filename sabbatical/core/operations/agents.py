@@ -37,7 +37,7 @@ async def create_agent(
 
         if boss:
             boss_row = await db.fetch_one(
-                "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
+                "SELECT name FROM agents WHERE name = :name AND organization_name = :org AND NOT is_removed",
                 {"name": boss, "org": organization},
             )
             if not boss_row:
@@ -53,7 +53,7 @@ async def create_agent(
             await db.execute(
                 """UPDATE agents SET description = NULL, boss = :boss,
                    instructions_path = :path, max_iterations = :max_iter, model = :model,
-                   is_removed = 0
+                   is_removed = false
                    WHERE name = :name AND organization_name = :org""",
                 {
                     "name": name,
@@ -96,7 +96,7 @@ async def list_agents(
 
     query = "SELECT * FROM agents WHERE organization_name = :org"
     if not include_removed:
-        query += " AND is_removed = 0"
+        query += " AND NOT is_removed"
 
     rows = await db.fetch_all(query, {"org": organization})
     agents = []
@@ -135,7 +135,7 @@ async def get_agent(
         instructions_content = "(Could not read instructions file)"
 
     subordinates_rows = await db.fetch_all(
-        "SELECT * FROM agents WHERE boss = :name AND organization_name = :org AND is_removed = 0",
+        "SELECT * FROM agents WHERE boss = :name AND organization_name = :org AND NOT is_removed",
         {"name": name, "org": organization},
     )
     subordinates = [
@@ -195,7 +195,7 @@ async def update_agent(
 
     async with db.transaction():
         agent = await db.fetch_one(
-            "SELECT * FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
+            "SELECT * FROM agents WHERE name = :name AND organization_name = :org AND NOT is_removed",
             {"name": name, "org": organization},
         )
         if not agent:
@@ -244,7 +244,7 @@ async def remove_agent(
 ) -> dict:
     async with db.transaction():
         agent = await db.fetch_one(
-            "SELECT * FROM agents WHERE name = :name AND organization_name = :org AND is_removed = 0",
+            "SELECT * FROM agents WHERE name = :name AND organization_name = :org AND NOT is_removed",
             {"name": name, "org": organization},
         )
         if not agent:
@@ -258,7 +258,7 @@ async def remove_agent(
             raise ConflictError("Agent is assigned to active tasks. Reassign them first.")
 
         await db.execute(
-            "UPDATE agents SET is_removed = 1 WHERE name = :name AND organization_name = :org",
+            "UPDATE agents SET is_removed = true WHERE name = :name AND organization_name = :org",
             {"name": name, "org": organization},
         )
 

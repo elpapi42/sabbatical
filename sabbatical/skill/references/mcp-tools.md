@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-All Sabbatical functionality is exposed through 22 MCP tools. The MCP server connects directly to the SQLite database — the API server does not need to be running.
+All Sabbatical functionality is exposed through 22 MCP tools. The MCP server connects directly to the PostgreSQL database (managed by pg0) — the API server does not need to be running.
 
 **Always use these MCP tools.** Do not use the CLI or HTTP API.
 

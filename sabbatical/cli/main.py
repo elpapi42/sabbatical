@@ -15,6 +15,7 @@ from sabbatical.cli.task_cmds import task_app
 from sabbatical.core.config import load_config
 from sabbatical.core.context import open_db_unchecked
 from sabbatical.core.daemon import dispatcher_is_running, DISPATCHER_PID_PATH
+from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.operations import status as status_ops
 
 app = typer.Typer(help="Sabbatical — AI Agent Orchestration CLI")
@@ -69,12 +70,17 @@ def status():
     # Task counts and worker stats — read directly from DB
     async def _get_db_stats():
         try:
-            async with open_db_unchecked(config.server.db_path) as db:
+            async with open_db_unchecked() as db:
                 return await status_ops.get_status(db, config)
+        except SabbaticalError:
+            return "no_dispatcher"  # pg0.uri missing — dispatcher not running
         except Exception:
-            return None
+            return None  # genuinely uninitialized or unexpected error
 
     data = asyncio.run(_get_db_stats())
+    if data == "no_dispatcher":
+        typer.echo("Database: unavailable (dispatcher not running)")
+        return
     if data is None:
         typer.echo("Database: not initialized")
         return

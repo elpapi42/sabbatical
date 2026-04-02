@@ -3,12 +3,13 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from mcp.server import FastMCP
 
 from sabbatical.core.config import load_config
-from sabbatical.core.context import open_db
 from sabbatical.core.daemon import ensure_dispatcher, ensure_dispatcher_if_needed
+from sabbatical.core.db import get_database
 from sabbatical.core.exceptions import SabbaticalError
 from sabbatical.core.operations import (
     agents as agent_ops,
@@ -17,21 +18,40 @@ from sabbatical.core.operations import (
     status as status_ops,
     tasks as task_ops,
 )
+from sabbatical.core.pg0_utils import read_pg0_uri, async_dsn_from_pg0_uri
 
 _db = None
+_db_uri = None
 _config = None
+
+
+async def _get_db():
+    """Return the current DB connection, reconnecting if pg0's URI changed."""
+    global _db, _db_uri
+    current_uri = read_pg0_uri()
+    if _db is None or current_uri != _db_uri:
+        if _db is not None:
+            await _db.disconnect()
+        _db = await get_database(async_dsn_from_pg0_uri(current_uri))
+        _db_uri = current_uri
+    return _db
 
 
 @asynccontextmanager
 async def lifespan(server: FastMCP):
-    global _db, _config
+    global _db, _db_uri, _config
     _config = load_config()
     await asyncio.to_thread(ensure_dispatcher)
-    async with open_db() as db:
-        _db = db
+    _db = await get_database(async_dsn_from_pg0_uri(read_pg0_uri()))
+    _db_uri = read_pg0_uri()
+    try:
         yield
-    _db = None
-    _config = None
+    finally:
+        if _db is not None:
+            await _db.disconnect()
+        _db = None
+        _db_uri = None
+        _config = None
 
 
 mcp = FastMCP(
@@ -45,8 +65,14 @@ mcp = FastMCP(
 )
 
 
+def _default(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    return str(obj)
+
+
 def _json(data) -> str:
-    return json.dumps(data, indent=2, default=str)
+    return json.dumps(data, indent=2, default=_default)
 
 
 def _error(e: SabbaticalError) -> str:
@@ -63,7 +89,8 @@ def _error(e: SabbaticalError) -> str:
 )
 async def get_status() -> str:
     try:
-        return _json(await status_ops.get_status(_db, _config))
+        db = await _get_db()
+        return _json(await status_ops.get_status(db, _config))
     except SabbaticalError as e:
         return _error(e)
 
@@ -76,7 +103,8 @@ async def get_status() -> str:
 @mcp.tool(description="List all organizations with summary info (agent count, cost).")
 async def list_organizations() -> str:
     try:
-        orgs = await org_ops.list_organizations(_db)
+        db = await _get_db()
+        orgs = await org_ops.list_organizations(db)
         return _json({"organizations": orgs})
     except SabbaticalError as e:
         return _error(e)
@@ -87,7 +115,8 @@ async def list_organizations() -> str:
 )
 async def get_organization(name: str) -> str:
     try:
-        return _json(await org_ops.get_organization(_db, name))
+        db = await _get_db()
+        return _json(await org_ops.get_organization(db, name))
     except SabbaticalError as e:
         return _error(e)
 
@@ -99,7 +128,8 @@ async def create_organization(
     name: str, workspace_path: str, description: str | None = None
 ) -> str:
     try:
-        return _json(await org_ops.create_organization(_db, name, workspace_path, description))
+        db = await _get_db()
+        return _json(await org_ops.create_organization(db, name, workspace_path, description))
     except SabbaticalError as e:
         return _error(e)
 
@@ -109,7 +139,8 @@ async def update_organization(
     name: str, workspace_path: str | None = None, description: str | None = None
 ) -> str:
     try:
-        return _json(await org_ops.update_organization(_db, name, workspace_path, description))
+        db = await _get_db()
+        return _json(await org_ops.update_organization(db, name, workspace_path, description))
     except SabbaticalError as e:
         return _error(e)
 
@@ -119,7 +150,8 @@ async def update_organization(
 )
 async def delete_organization(name: str) -> str:
     try:
-        await org_ops.delete_organization(_db, name)
+        db = await _get_db()
+        await org_ops.delete_organization(db, name)
         return json.dumps({"status": "success"})
     except SabbaticalError as e:
         return _error(e)
@@ -135,7 +167,8 @@ async def delete_organization(name: str) -> str:
 )
 async def list_agents(organization: str, include_removed: bool = False) -> str:
     try:
-        agents = await agent_ops.list_agents(_db, organization, include_removed)
+        db = await _get_db()
+        agents = await agent_ops.list_agents(db, organization, include_removed)
         return _json({"agents": agents})
     except SabbaticalError as e:
         return _error(e)
@@ -146,7 +179,8 @@ async def list_agents(organization: str, include_removed: bool = False) -> str:
 )
 async def get_agent(organization: str, name: str) -> str:
     try:
-        return _json(await agent_ops.get_agent(_db, organization, name))
+        db = await _get_db()
+        return _json(await agent_ops.get_agent(db, organization, name))
     except SabbaticalError as e:
         return _error(e)
 
@@ -163,8 +197,9 @@ async def create_agent(
     model: str | None = None,
 ) -> str:
     try:
+        db = await _get_db()
         result = await agent_ops.create_agent(
-            _db, _config, organization, name, instructions_path,
+            db, _config, organization, name, instructions_path,
             boss, max_iterations, model,
         )
         return _json(result)
@@ -194,8 +229,9 @@ async def update_agent(
         if model is not None:
             kwargs["model"] = model
 
+        db = await _get_db()
         result = await agent_ops.update_agent(
-            _db, _config, organization, name, **kwargs
+            db, _config, organization, name, **kwargs
         )
         return _json(result)
     except SabbaticalError as e:
@@ -207,7 +243,8 @@ async def update_agent(
 )
 async def remove_agent(organization: str, name: str) -> str:
     try:
-        return _json(await agent_ops.remove_agent(_db, organization, name))
+        db = await _get_db()
+        return _json(await agent_ops.remove_agent(db, organization, name))
     except SabbaticalError as e:
         return _error(e)
 
@@ -226,7 +263,8 @@ async def list_tasks(
     assignee: str | None = None,
 ) -> str:
     try:
-        tasks = await task_ops.list_tasks(_db, organization, status, assignee)
+        db = await _get_db()
+        tasks = await task_ops.list_tasks(db, organization, status, assignee)
         return _json({"tasks": tasks})
     except SabbaticalError as e:
         return _error(e)
@@ -237,7 +275,8 @@ async def list_tasks(
 )
 async def get_task(task_id: str) -> str:
     try:
-        return _json(await task_ops.get_task(_db, task_id))
+        db = await _get_db()
+        return _json(await task_ops.get_task(db, task_id))
     except SabbaticalError as e:
         return _error(e)
 
@@ -250,7 +289,8 @@ async def create_task(
 ) -> str:
     try:
         await asyncio.to_thread(ensure_dispatcher_if_needed)
-        return _json(await task_ops.create_task(_db, organization, title, description))
+        db = await _get_db()
+        return _json(await task_ops.create_task(db, organization, title, description))
     except SabbaticalError as e:
         return _error(e)
 
@@ -261,7 +301,8 @@ async def create_task(
 async def add_comment(task_id: str, body: str) -> str:
     try:
         await asyncio.to_thread(ensure_dispatcher_if_needed)
-        return _json(await task_ops.add_comment(_db, task_id, body))
+        db = await _get_db()
+        return _json(await task_ops.add_comment(db, task_id, body))
     except SabbaticalError as e:
         return _error(e)
 
@@ -271,7 +312,8 @@ async def add_comment(task_id: str, body: str) -> str:
 )
 async def preempt_task(task_id: str) -> str:
     try:
-        return _json(await task_ops.preempt_task(_db, task_id))
+        db = await _get_db()
+        return _json(await task_ops.preempt_task(db, task_id))
     except SabbaticalError as e:
         return _error(e)
 
@@ -281,7 +323,8 @@ async def preempt_task(task_id: str) -> str:
 )
 async def complete_task(task_id: str) -> str:
     try:
-        return _json(await task_ops.complete_task(_db, task_id))
+        db = await _get_db()
+        return _json(await task_ops.complete_task(db, task_id))
     except SabbaticalError as e:
         return _error(e)
 
@@ -289,7 +332,8 @@ async def complete_task(task_id: str) -> str:
 @mcp.tool(description="Reopen a done or failed task. Assigns it back to the user.")
 async def reopen_task(task_id: str) -> str:
     try:
-        return _json(await task_ops.reopen_task(_db, task_id))
+        db = await _get_db()
+        return _json(await task_ops.reopen_task(db, task_id))
     except SabbaticalError as e:
         return _error(e)
 
@@ -300,7 +344,8 @@ async def reopen_task(task_id: str) -> str:
 async def retry_task(task_id: str, assignee: str | None = None) -> str:
     try:
         await asyncio.to_thread(ensure_dispatcher_if_needed)
-        return _json(await task_ops.retry_task(_db, task_id, assignee))
+        db = await _get_db()
+        return _json(await task_ops.retry_task(db, task_id, assignee))
     except SabbaticalError as e:
         return _error(e)
 
@@ -310,7 +355,8 @@ async def retry_task(task_id: str, assignee: str | None = None) -> str:
 )
 async def cancel_task(task_id: str) -> str:
     try:
-        return _json(await task_ops.cancel_task(_db, task_id))
+        db = await _get_db()
+        return _json(await task_ops.cancel_task(db, task_id))
     except SabbaticalError as e:
         return _error(e)
 
@@ -323,7 +369,8 @@ async def cancel_task(task_id: str) -> str:
 @mcp.tool(description="List all runs (execution records) for a task.")
 async def list_runs(task_id: str) -> str:
     try:
-        runs = await run_ops.list_runs(_db, task_id)
+        db = await _get_db()
+        runs = await run_ops.list_runs(db, task_id)
         return _json({"runs": runs})
     except SabbaticalError as e:
         return _error(e)
@@ -334,7 +381,8 @@ async def list_runs(task_id: str) -> str:
 )
 async def get_run(run_id: str) -> str:
     try:
-        return _json(await run_ops.get_run(_db, run_id))
+        db = await _get_db()
+        return _json(await run_ops.get_run(db, run_id))
     except SabbaticalError as e:
         return _error(e)
 

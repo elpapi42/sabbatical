@@ -24,7 +24,7 @@ DISPATCHER_PID_PATH = SABBATICAL_DIR / "dispatcher.pid"
 DISPATCHER_READY_PATH = SABBATICAL_DIR / "dispatcher.ready"
 DISPATCHER_LOG_PATH = SABBATICAL_DIR / "dispatcher.log"
 
-_READY_TIMEOUT = 10.0  # seconds
+_READY_TIMEOUT = 30.0  # pg0 first-run extracts PG binaries + initializes DB
 _READY_POLL_INTERVAL = 0.25  # seconds
 _STOP_TIMEOUT = 10.0  # seconds
 _LOG_TRUNCATE_LINES = 1000

@@ -8,14 +8,14 @@ from sabbatical.core.exceptions import SabbaticalError
 def handle_error(e: Exception) -> None:
     """Handle errors from core operations and DB access.
 
-    Catches SabbaticalError (including SchemaError) and sqlite3.OperationalError
-    (e.g., busy_timeout exceeded). Re-raises unexpected exceptions.
+    Catches SabbaticalError (including SchemaError) and common PostgreSQL
+    connection errors. Re-raises unexpected exceptions.
     """
     if isinstance(e, SabbaticalError):
         typer.echo(f"Error: {e}", err=True)
-    elif "database is locked" in str(e):
+    elif "connection refused" in str(e).lower():
         typer.echo(
-            "Error: Database is locked. Is another process holding a long write?",
+            "Error: Cannot connect to database. Is the dispatcher running?",
             err=True,
         )
     else:
